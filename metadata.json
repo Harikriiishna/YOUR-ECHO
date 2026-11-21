@@ -1,0 +1,6 @@
+{
+  "name": "ECHO — The Human Memory Network",
+  "description": "Save what matters. Understand your life. Connect with humanity. A unified personal memory, AI reflection, time capsule, skill exchange, object heirloom, dream archive, and anonymous humanity platform.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

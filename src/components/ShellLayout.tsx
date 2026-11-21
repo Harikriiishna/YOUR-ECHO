@@ -1,0 +1,448 @@
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Bell,
+  BookOpen,
+  Clock,
+  Compass,
+  Feather,
+  HeartHandshake,
+  Home,
+  Mic,
+  Moon,
+  Plus,
+  RefreshCw,
+  Repeat,
+  Search,
+  Sparkles,
+  User,
+  Watch,
+  WifiOff,
+  X,
+} from 'lucide-react';
+import { useEcho } from '../context/EchoContext';
+import { apiRequest } from '../lib/api';
+import type { ModuleId, SearchResult } from '../types/echo';
+
+const SIDEBAR_ITEMS: Array<{ id: ModuleId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+  { id: 'home', label: 'Home', icon: Home },
+  { id: 'memories', label: 'ECHO Memory', icon: BookOpen },
+  { id: 'ai', label: 'AI Life Memory', icon: Sparkles },
+  { id: 'capsules', label: 'Time Capsules', icon: Clock },
+  { id: 'wisdom', label: "Stranger's Wisdom", icon: Feather },
+  { id: 'skillswap', label: 'SkillSwap', icon: Repeat },
+  { id: 'objects', label: 'Life Behind Objects', icon: Watch },
+  { id: 'dreams', label: 'Dream Archive', icon: Moon },
+  { id: 'humanity', label: 'Humanity Feed', icon: HeartHandshake },
+];
+
+const QUICK_ACTIONS: Array<{
+  target: string;
+  module: ModuleId;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accent: string;
+}> = [
+  { target: 'memory', module: 'memories', label: 'Create memory', icon: BookOpen, accent: 'text-sky-300' },
+  { target: 'voice', module: 'memories', label: 'Record voice', icon: Mic, accent: 'text-cyan-300' },
+  { target: 'capsule', module: 'capsules', label: 'Create time capsule', icon: Clock, accent: 'text-amber-300' },
+  { target: 'wisdom', module: 'wisdom', label: 'Share wisdom', icon: Feather, accent: 'text-violet-300' },
+  { target: 'humanity', module: 'humanity', label: 'Share humanity story', icon: HeartHandshake, accent: 'text-teal-300' },
+  { target: 'object', module: 'objects', label: 'Add object', icon: Watch, accent: 'text-rose-300' },
+  { target: 'dream', module: 'dreams', label: 'Record dream', icon: Moon, accent: 'text-indigo-300' },
+  { target: 'skill', module: 'skillswap', label: 'Offer skill', icon: Repeat, accent: 'text-emerald-300' },
+];
+
+export function ShellLayout({ children }: { children: React.ReactNode }) {
+  const {
+    user,
+    activeModule,
+    navigateTo,
+    notifications,
+    unreadCount,
+    markNotificationRead,
+    markAllNotificationsRead,
+    isOnline,
+    pendingMutations,
+    syncNow,
+    setQuickCaptureTarget,
+    searchOpen,
+    setSearchOpen,
+  } = useEcho();
+
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [fabOpen, setFabOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (searchOpen) {
+      searchInputRef.current?.focus();
+    }
+  }, [searchOpen]);
+
+  useEffect(() => {
+    if (!searchOpen || !searchQuery.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    const handle = window.setTimeout(async () => {
+      setSearching(true);
+      try {
+        const res = await apiRequest<{ results: SearchResult[] }>(
+          `/search?q=${encodeURIComponent(searchQuery.trim())}`
+        );
+        setSearchResults(res.results);
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearching(false);
+      }
+    }, 220);
+    return () => window.clearTimeout(handle);
+  }, [searchQuery, searchOpen]);
+
+  const triggerQuickAction = (module: ModuleId, target: string) => {
+    setFabOpen(false);
+    navigateTo(module);
+    setQuickCaptureTarget(target);
+  };
+
+  const handleManualSync = async () => {
+    setSyncing(true);
+    await syncNow();
+    setSyncing(false);
+  };
+
+  const currentLabel =
+    SIDEBAR_ITEMS.find((i) => i.id === activeModule)?.label ||
+    (activeModule === 'discover' ? 'Discover' : 'Profile & Privacy');
+
+  return (
+    <div className="min-h-screen w-full max-w-full overflow-x-clip bg-[#070B14] text-slate-100 flex">
+      {/* Desktop Left Sidebar */}
+      <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 border-r border-white/[0.08] bg-[#090F1D]">
+        <div className="h-16 px-6 flex items-center justify-between border-b border-white/[0.08]">
+          <button
+            type="button"
+            onClick={() => navigateTo('home')}
+            className="touch-manipulation font-display text-lg font-bold tracking-tight text-white whitespace-nowrap"
+          >
+            ECHO
+          </button>
+          <button
+            type="button"
+            onClick={() => setFabOpen(true)}
+            title="Quick Capture"
+            className="touch-manipulation inline-flex items-center justify-center w-8 h-8 rounded-lg bg-sky-400 text-slate-950 hover:bg-sky-300 transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+          </button>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+          {SIDEBAR_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = activeModule === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => navigateTo(item.id)}
+                className={`touch-manipulation w-full flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
+                  active
+                    ? 'bg-sky-400/15 text-sky-200 border border-sky-400/30'
+                    : 'text-slate-400 hover:text-white hover:bg-white/[0.04] border border-transparent'
+                }`}
+              >
+                <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-sky-300' : ''}`} />
+                <span className="truncate">{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="p-3 border-t border-white/[0.08] space-y-1">
+          <button
+            type="button"
+            onClick={() => navigateTo('discover')}
+            className={`touch-manipulation w-full flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${
+              activeModule === 'discover' ? 'bg-white/[0.08] text-white' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Compass className="w-4 h-4 shrink-0" />
+            <span>Discover</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigateTo('profile')}
+            className={`touch-manipulation w-full flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors ${
+              activeModule === 'profile' ? 'bg-white/[0.08] text-white' : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <User className="w-4 h-4 shrink-0" />
+            <span className="truncate">{user?.displayName || 'Profile'}</span>
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div className="flex-1 min-w-0 w-full lg:pl-64 flex flex-col min-h-screen">
+        {/* Sticky Top Bar (compact <= 56px on mobile, 3-zone contract) */}
+        <header className="sticky top-0 z-30 h-14 w-full bg-[#070B14]/90 backdrop-blur-md border-b border-white/[0.08] px-3 sm:px-6 flex items-center justify-between gap-2.5 sm:gap-4">
+          <div className="flex items-center gap-2 min-w-0 shrink-0">
+            <button
+              type="button"
+              onClick={() => navigateTo('home')}
+              className="touch-manipulation lg:hidden font-display text-base font-bold text-white whitespace-nowrap shrink-0"
+            >
+              ECHO
+            </button>
+            <span className="hidden lg:inline font-display text-sm font-semibold text-white truncate">
+              {currentLabel}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className="touch-manipulation flex-1 min-w-0 flex items-center gap-2 rounded-xl border border-white/10 bg-[#0D1424] px-3 py-2 text-xs text-slate-400 hover:text-white hover:border-white/20 max-w-xs justify-between"
+          >
+            <span className="inline-flex items-center gap-2 min-w-0 truncate">
+              <Search className="w-3.5 h-3.5 shrink-0" />
+              <span className="truncate">Search ECHO...</span>
+            </span>
+            <span className="hidden sm:inline font-mono text-[10px] text-slate-500 shrink-0">⌘K</span>
+          </button>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setNotifOpen((o) => !o)}
+              aria-label="Notifications"
+              className="touch-manipulation relative inline-flex items-center justify-center w-10 h-10 rounded-xl border border-white/10 bg-[#0D1424] text-slate-300 hover:text-white"
+            >
+              <Bell className="w-4 h-4" />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-sky-400 text-[#070B14] font-mono text-[10px] font-bold flex items-center justify-center px-1 tabular-nums">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+          </div>
+        </header>
+
+        {/* Honest Offline & Pending Sync Banner */}
+        {(!isOnline || pendingMutations.length > 0) && (
+          <div className="bg-amber-500/10 border-b border-amber-500/25 px-4 sm:px-6 py-2 flex items-center justify-between gap-3 text-xs text-amber-100">
+            <div className="inline-flex items-center gap-2">
+              {!isOnline && <WifiOff className="w-3.5 h-3.5 text-amber-300 shrink-0" />}
+              <span>
+                {!isOnline
+                  ? `Offline mode — cached memories readable. ${pendingMutations.length} pending change(s) queued.`
+                  : `${pendingMutations.length} offline change(s) waiting for server confirmation.`}
+              </span>
+            </div>
+            {isOnline && pendingMutations.length > 0 && (
+              <button
+                type="button"
+                onClick={() => void handleManualSync()}
+                disabled={syncing}
+                className="inline-flex items-center gap-1 rounded-lg bg-amber-400 px-2.5 py-1 text-[11px] font-semibold text-slate-950 shrink-0"
+              >
+                <RefreshCw className={`w-3 h-3 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? 'Syncing...' : 'Sync Now'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Main Viewport */}
+        <main className="flex-1 min-w-0 w-full px-3.5 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 lg:pb-10 max-w-7xl mx-auto">
+          {children}
+        </main>
+      </div>
+
+      {/* Mobile Floating Quick Action Button */}
+      <button
+        type="button"
+        onClick={() => setFabOpen(true)}
+        aria-label="Quick capture menu"
+        className="touch-manipulation lg:hidden fixed right-4 bottom-[74px] z-40 w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-400 to-cyan-300 text-slate-950 shadow-lg shadow-sky-500/25 flex items-center justify-center"
+      >
+        <Plus className="w-6 h-6" />
+      </button>
+
+      {/* Mobile Bottom Navigation (compact <= 60px height, 5 tabs) */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 min-h-[58px] pb-[env(safe-area-inset-bottom)] bg-[#090F1D]/95 backdrop-blur-md border-t border-white/[0.08] grid grid-cols-5 items-center px-1">
+        {[
+          { id: 'home' as ModuleId, label: 'Home', icon: Home },
+          { id: 'memories' as ModuleId, label: 'Memories', icon: BookOpen },
+          { id: 'humanity' as ModuleId, label: 'Humanity', icon: HeartHandshake },
+          { id: 'discover' as ModuleId, label: 'Discover', icon: Compass },
+          { id: 'profile' as ModuleId, label: 'Profile', icon: User },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const active = activeModule === tab.id;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => navigateTo(tab.id)}
+              className={`touch-manipulation flex flex-col items-center justify-center min-h-[44px] text-[10px] font-medium ${
+                active ? 'text-sky-300' : 'text-slate-400'
+              }`}
+            >
+              <Icon className="w-5 h-5 mb-0.5" />
+              <span>{tab.label}</span>
+            </button>
+          );
+        })}
+      </nav>
+
+      {/* QUICK CAPTURE SHEET */}
+      {fabOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/12 bg-[#0D1424] p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-display text-lg font-bold text-white">Create in ECHO</h2>
+              <button type="button" onClick={() => setFabOpen(false)} className="touch-manipulation text-slate-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              {QUICK_ACTIONS.map((qa) => {
+                const Icon = qa.icon;
+                return (
+                  <button
+                    key={qa.target}
+                    type="button"
+                    onClick={() => triggerQuickAction(qa.module, qa.target)}
+                    className="touch-manipulation flex items-center gap-2.5 rounded-xl border border-white/[0.08] bg-[#070B14] hover:border-white/20 p-3 text-left text-xs font-medium text-white min-h-[48px]"
+                  >
+                    <Icon className={`w-4 h-4 shrink-0 ${qa.accent}`} />
+                    <span className="truncate">{qa.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* UNIFIED SEARCH MODAL */}
+      {searchOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start justify-center p-4 pt-16">
+          <div className="w-full max-w-xl rounded-2xl border border-white/12 bg-[#0D1424] overflow-hidden">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-white/[0.08]">
+              <Search className="w-4 h-4 text-sky-400 shrink-0" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search memories, capsules, objects, dreams, wisdom, skills..."
+                className="flex-1 bg-transparent text-sm text-white placeholder:text-slate-500 focus:outline-none"
+              />
+              <button type="button" onClick={() => setSearchOpen(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="max-h-96 overflow-y-auto p-3 space-y-1.5">
+              {searching ? (
+                <p className="text-xs text-slate-400 p-4 text-center">Searching your ECHO network...</p>
+              ) : searchQuery.trim() && searchResults.length === 0 ? (
+                <p className="text-xs text-slate-400 p-4 text-center">No matching entries found.</p>
+              ) : !searchQuery.trim() ? (
+                <p className="text-xs text-slate-500 p-4 text-center">
+                  Type a keyword, person, place, emotion, or skill to search across all modules.
+                </p>
+              ) : (
+                searchResults.map((res) => (
+                  <button
+                    key={`${res.module}-${res.id}`}
+                    type="button"
+                    onClick={() => {
+                      setSearchOpen(false);
+                      navigateTo(res.module, res.id);
+                    }}
+                    className="w-full text-left rounded-xl hover:bg-white/[0.06] px-3.5 py-2.5 flex items-center justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-white truncate">{res.title}</div>
+                      <div className="text-xs text-slate-400 truncate">
+                        {res.module} · {res.subtitle}
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-mono text-slate-500 shrink-0">
+                      {res.date ? res.date.slice(0, 10) : ''}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* NOTIFICATIONS DRAWER */}
+      {notifOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex justify-end">
+          <div className="w-full max-w-sm bg-[#090F1D] border-l border-white/10 h-full p-5 flex flex-col justify-between">
+            <div className="space-y-4 overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <h2 className="font-display text-lg font-bold text-white">Notifications</h2>
+                <div className="flex items-center gap-3">
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => void markAllNotificationsRead()}
+                      className="text-xs text-sky-300 hover:underline"
+                    >
+                      Mark all read
+                    </button>
+                  )}
+                  <button type="button" onClick={() => setNotifOpen(false)} className="text-slate-400 hover:text-white">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {notifications.length === 0 ? (
+                <p className="text-xs text-slate-400 py-8 text-center">No notifications yet.</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {notifications.map((n) => (
+                    <button
+                      key={n.id}
+                      type="button"
+                      onClick={() => {
+                        void markNotificationRead(n.id);
+                        setNotifOpen(false);
+                        navigateTo(n.linkModule || 'home', n.linkId);
+                      }}
+                      className={`w-full text-left rounded-xl border p-3.5 space-y-1 transition-colors ${
+                        n.isRead
+                          ? 'border-white/[0.06] bg-[#0D1424]/60 text-slate-400'
+                          : 'border-sky-400/35 bg-[#101B30] text-white'
+                      }`}
+                    >
+                      <div className="text-xs font-semibold">{n.title}</div>
+                      <div className="text-xs text-slate-300">{n.body}</div>
+                      <div className="text-[10px] font-mono text-slate-500">
+                        {new Date(n.createdAt).toLocaleString()}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
