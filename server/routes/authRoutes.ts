@@ -19,6 +19,12 @@ import { pushNotification } from '../ws.ts';
 
 export const authRouter = Router();
 
+const ALLOWED_THEMES = new Set(['midnight', 'glass', 'crystal', 'aurora', 'amber', 'violet']);
+
+function sanitizeTheme(value: unknown, fallback = 'midnight'): string {
+  return typeof value === 'string' && ALLOWED_THEMES.has(value) ? value : fallback;
+}
+
 function createNotificationRecord(
   userId: string,
   type: string,
@@ -37,11 +43,12 @@ function createNotificationRecord(
 }
 
 authRouter.post('/auth/register', rateLimit('auth', 20, 60_000), (req, res) => {
-  const { email, password, displayName, timezone } = req.body as {
+  const { email, password, displayName, timezone, theme } = req.body as {
     email?: string;
     password?: string;
     displayName?: string;
     timezone?: string;
+    theme?: string;
   };
 
   const cleanEmail = (email || '').trim().toLowerCase();
@@ -69,12 +76,13 @@ authRouter.post('/auth/register', rateLimit('auth', 20, 60_000), (req, res) => {
   const now = new Date().toISOString();
   const pwHash = hashPassword(password);
   const tz = typeof timezone === 'string' && timezone.length <= 60 ? timezone : 'UTC';
+  const cleanTheme = sanitizeTheme(theme, 'midnight');
 
   db.transaction(() => {
     db.prepare(`
-      INSERT INTO users (id, email, password_hash, display_name, timezone, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(userId, cleanEmail, pwHash, cleanName.slice(0, 80), tz, now, now);
+      INSERT INTO users (id, email, password_hash, display_name, timezone, theme, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(userId, cleanEmail, pwHash, cleanName.slice(0, 80), tz, cleanTheme, now, now);
 
     db.prepare(`
       INSERT INTO skill_profiles (user_id, updated_at) VALUES (?, ?)
@@ -251,12 +259,13 @@ authRouter.post('/auth/confirm-reset', rateLimit('reset', 10, 60_000), (req, res
 });
 
 authRouter.put('/profile', requireAuth, (req: AuthenticatedRequest, res) => {
-  const { displayName, bio, avatarMediaId, locationHint, timezone, aiConsent, notificationPrefs } = req.body as {
+  const { displayName, bio, avatarMediaId, locationHint, timezone, theme, aiConsent, notificationPrefs } = req.body as {
     displayName?: string;
     bio?: string;
     avatarMediaId?: string | null;
     locationHint?: string;
     timezone?: string;
+    theme?: string;
     aiConsent?: boolean;
     notificationPrefs?: Record<string, boolean>;
   };
@@ -266,6 +275,7 @@ authRouter.put('/profile', requireAuth, (req: AuthenticatedRequest, res) => {
   const cleanBio = typeof bio === 'string' ? bio.slice(0, 500) : user.bio;
   const cleanLocation = typeof locationHint === 'string' ? locationHint.slice(0, 100) : user.locationHint;
   const cleanTz = typeof timezone === 'string' ? timezone.slice(0, 60) : user.timezone;
+  const cleanTheme = theme !== undefined ? sanitizeTheme(theme, user.theme) : user.theme;
   const cleanAiConsent = typeof aiConsent === 'boolean' ? (aiConsent ? 1 : 0) : user.aiConsent ? 1 : 0;
   const cleanPrefs = notificationPrefs ? JSON.stringify(notificationPrefs) : JSON.stringify(user.notificationPrefs);
 
@@ -283,9 +293,9 @@ authRouter.put('/profile', requireAuth, (req: AuthenticatedRequest, res) => {
 
   db.prepare(`
     UPDATE users
-    SET display_name = ?, bio = ?, avatar_media_id = ?, location_hint = ?, timezone = ?, ai_consent = ?, notification_prefs_json = ?, updated_at = ?
+    SET display_name = ?, bio = ?, avatar_media_id = ?, location_hint = ?, timezone = ?, theme = ?, ai_consent = ?, notification_prefs_json = ?, updated_at = ?
     WHERE id = ?
-  `).run(cleanName, cleanBio, verifiedAvatar, cleanLocation, cleanTz, cleanAiConsent, cleanPrefs, new Date().toISOString(), user.id);
+  `).run(cleanName, cleanBio, verifiedAvatar, cleanLocation, cleanTz, cleanTheme, cleanAiConsent, cleanPrefs, new Date().toISOString(), user.id);
 
   const updated = db.prepare('SELECT * FROM users WHERE id = ?').get(user.id) as Record<string, unknown>;
   res.json({ user: rowToAuthUser(updated) });

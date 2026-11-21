@@ -1,6 +1,144 @@
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
+@theme inline {
+  --color-canvas: var(--echo-canvas);
+  --color-shell: var(--echo-shell);
+  --color-surface: var(--echo-surface);
+  --color-surface-raised: var(--echo-surface-raised);
+  --color-inset: var(--echo-inset);
+  --color-ink: var(--echo-ink);
+  --color-ink-secondary: var(--echo-ink-secondary);
+  --color-ink-muted: var(--echo-ink-muted);
+  --color-hairline: var(--echo-hairline);
+  --color-hairline-strong: var(--echo-hairline-strong);
+  --color-tint: var(--echo-tint);
+  --color-tint-hover: var(--echo-tint-hover);
+}
+
+:root,
+:root[data-theme="midnight"] {
+  --echo-canvas: #070B14;
+  --echo-shell: #090F1D;
+  --echo-surface: #0D1424;
+  --echo-surface-raised: #111B30;
+  --echo-inset: #070B14;
+  --echo-ink: #F8FAFC;
+  --echo-ink-secondary: #CBD5E1;
+  --echo-ink-muted: #94A3B8;
+  --echo-hairline: rgba(255, 255, 255, 0.08);
+  --echo-hairline-strong: rgba(255, 255, 255, 0.14);
+  --echo-tint: rgba(255, 255, 255, 0.04);
+  --echo-tint-hover: rgba(255, 255, 255, 0.09);
+  --echo-backdrop: none;
+  --echo-glass-filter: none;
+  --echo-surface-shadow: none;
+}
+
+:root[data-theme="glass"] {
+  --echo-canvas: #060D1D;
+  --echo-shell: rgba(11, 19, 39, 0.56);
+  --echo-surface: rgba(16, 28, 56, 0.46);
+  --echo-surface-raised: rgba(24, 42, 82, 0.58);
+  --echo-inset: rgba(7, 13, 29, 0.52);
+  --echo-ink: #F8FAFC;
+  --echo-ink-secondary: #E2E8F0;
+  --echo-ink-muted: #94A3B8;
+  --echo-hairline: rgba(255, 255, 255, 0.14);
+  --echo-hairline-strong: rgba(255, 255, 255, 0.24);
+  --echo-tint: rgba(255, 255, 255, 0.07);
+  --echo-tint-hover: rgba(255, 255, 255, 0.14);
+  --echo-backdrop:
+    radial-gradient(62% 52% at 12% 8%, rgba(56, 189, 248, 0.26), transparent 68%),
+    radial-gradient(55% 48% at 88% 16%, rgba(129, 140, 248, 0.24), transparent 70%),
+    radial-gradient(50% 55% at 72% 88%, rgba(45, 212, 191, 0.18), transparent 70%),
+    linear-gradient(155deg, #050914 0%, #09142A 50%, #0B1124 100%);
+  --echo-glass-filter: blur(22px) saturate(165%);
+  --echo-surface-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 16px 36px -18px rgba(0, 0, 0, 0.65);
+}
+
+:root[data-theme="crystal"] {
+  --echo-canvas: #E8F0FA;
+  --echo-shell: rgba(255, 255, 255, 0.68);
+  --echo-surface: rgba(255, 255, 255, 0.66);
+  --echo-surface-raised: rgba(255, 255, 255, 0.86);
+  --echo-inset: rgba(241, 245, 249, 0.72);
+  --echo-ink: #0F172A;
+  --echo-ink-secondary: #334155;
+  --echo-ink-muted: #64748B;
+  --echo-hairline: rgba(15, 23, 42, 0.10);
+  --echo-hairline-strong: rgba(15, 23, 42, 0.18);
+  --echo-tint: rgba(15, 23, 42, 0.05);
+  --echo-tint-hover: rgba(15, 23, 42, 0.10);
+  --echo-backdrop:
+    radial-gradient(60% 50% at 10% 10%, rgba(56, 189, 248, 0.26), transparent 68%),
+    radial-gradient(52% 48% at 90% 14%, rgba(167, 139, 250, 0.22), transparent 70%),
+    radial-gradient(50% 50% at 65% 90%, rgba(45, 212, 191, 0.18), transparent 72%),
+    linear-gradient(155deg, #E2ECF8 0%, #EFF5FC 55%, #E7EFFB 100%);
+  --echo-glass-filter: blur(20px) saturate(165%);
+  --echo-surface-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 12px 30px -14px rgba(15, 23, 42, 0.14);
+}
+
+:root[data-theme="aurora"] {
+  --echo-canvas: #041115;
+  --echo-shell: #06171C;
+  --echo-surface: #091E24;
+  --echo-surface-raised: #0F2B33;
+  --echo-inset: #041014;
+  --echo-ink: #F0FDFA;
+  --echo-ink-secondary: #CCFBF1;
+  --echo-ink-muted: #7FB3B8;
+  --echo-hairline: rgba(94, 234, 212, 0.12);
+  --echo-hairline-strong: rgba(94, 234, 212, 0.22);
+  --echo-tint: rgba(94, 234, 212, 0.06);
+  --echo-tint-hover: rgba(94, 234, 212, 0.12);
+  --echo-backdrop:
+    radial-gradient(60% 50% at 15% 0%, rgba(20, 184, 166, 0.14), transparent 70%),
+    radial-gradient(45% 45% at 90% 85%, rgba(56, 189, 248, 0.10), transparent 70%);
+  --echo-glass-filter: none;
+  --echo-surface-shadow: none;
+}
+
+:root[data-theme="amber"] {
+  --echo-canvas: #110B07;
+  --echo-shell: #170F0A;
+  --echo-surface: #1E150F;
+  --echo-surface-raised: #2A1D15;
+  --echo-inset: #110B07;
+  --echo-ink: #FBF7F1;
+  --echo-ink-secondary: #E7D8C9;
+  --echo-ink-muted: #AD9784;
+  --echo-hairline: rgba(251, 191, 36, 0.12);
+  --echo-hairline-strong: rgba(251, 191, 36, 0.22);
+  --echo-tint: rgba(251, 191, 36, 0.06);
+  --echo-tint-hover: rgba(251, 191, 36, 0.12);
+  --echo-backdrop:
+    radial-gradient(60% 50% at 20% 0%, rgba(245, 158, 11, 0.12), transparent 70%),
+    radial-gradient(45% 45% at 88% 90%, rgba(234, 88, 12, 0.08), transparent 70%);
+  --echo-glass-filter: none;
+  --echo-surface-shadow: none;
+}
+
+:root[data-theme="violet"] {
+  --echo-canvas: #0B0714;
+  --echo-shell: #110C1F;
+  --echo-surface: #16102B;
+  --echo-surface-raised: #20183D;
+  --echo-inset: #0B0714;
+  --echo-ink: #F5F3FF;
+  --echo-ink-secondary: #DDD6FE;
+  --echo-ink-muted: #9D93BF;
+  --echo-hairline: rgba(196, 181, 253, 0.12);
+  --echo-hairline-strong: rgba(196, 181, 253, 0.22);
+  --echo-tint: rgba(196, 181, 253, 0.06);
+  --echo-tint-hover: rgba(196, 181, 253, 0.12);
+  --echo-backdrop:
+    radial-gradient(58% 50% at 15% 5%, rgba(167, 139, 250, 0.14), transparent 70%),
+    radial-gradient(50% 48% at 85% 90%, rgba(244, 114, 182, 0.09), transparent 70%);
+  --echo-glass-filter: none;
+  --echo-surface-shadow: none;
+}
+
 @layer base {
   :root {
     --font-display: 'Plus Jakarta Sans', system-ui, sans-serif;
@@ -10,12 +148,18 @@
 
   html, body, #root {
     font-family: var(--font-body);
-    background-color: #070B14;
-    color: #F1F5F9;
+    background-color: var(--echo-canvas);
+    color: var(--echo-ink);
     scroll-behavior: smooth;
     width: 100%;
     max-width: 100%;
     overflow-x: clip;
+  }
+
+  body {
+    background-image: var(--echo-backdrop);
+    background-attachment: fixed;
+    background-size: cover;
   }
 
   .no-scrollbar::-webkit-scrollbar {
@@ -49,6 +193,18 @@
   }
 }
 
+.bg-surface,
+.bg-surface-raised,
+.bg-shell {
+  backdrop-filter: var(--echo-glass-filter);
+  -webkit-backdrop-filter: var(--echo-glass-filter);
+}
+
+.bg-surface,
+.bg-surface-raised {
+  box-shadow: var(--echo-surface-shadow);
+}
+
 /* Custom subtle scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
@@ -60,12 +216,12 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.22);
+  background: rgba(148, 163, 184, 0.25);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.38);
+  background: rgba(148, 163, 184, 0.42);
 }
 
 @media (prefers-reduced-motion: reduce) {

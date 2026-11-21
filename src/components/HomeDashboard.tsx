@@ -163,23 +163,23 @@ export function HomeDashboard() {
     accent: string;
     icon: React.ComponentType<{ className?: string }>;
   }> = [
-    { id: 'memories', title: 'ECHO Memory', subtitle: 'Timeline, calendar, map & voice', accent: 'text-sky-300', icon: BookOpen },
-    { id: 'ai', title: 'AI Life Memory', subtitle: 'Ask grounded questions about your past', accent: 'text-cyan-300', icon: Sparkles },
-    { id: 'capsules', title: 'Time Capsule', subtitle: 'Seal letters & media for future dates', accent: 'text-amber-300', icon: Clock },
-    { id: 'wisdom', title: "Stranger's Wisdom", subtitle: 'Anonymous advice & life lessons', accent: 'text-violet-300', icon: Feather },
-    { id: 'skillswap', title: 'SkillSwap', subtitle: 'Mutual learning & live chat', accent: 'text-emerald-300', icon: Repeat },
-    { id: 'objects', title: 'Life Behind Objects', subtitle: 'Heirloom stories & QR provenance', accent: 'text-rose-300', icon: Watch },
-    { id: 'dreams', title: 'Dream Archive', subtitle: 'Dreams, vividness & patterns', accent: 'text-indigo-300', icon: Moon },
-    { id: 'humanity', title: 'Humanity Feed', subtitle: 'Global anonymous reflections', accent: 'text-teal-300', icon: HeartHandshake },
+    { id: 'memories', title: 'ECHO Memory', subtitle: 'Timeline, calendar, map & voice', accent: 'text-sky-600 dark:text-sky-300', icon: BookOpen },
+    { id: 'ai', title: 'AI Life Memory', subtitle: 'Ask grounded questions about your past', accent: 'text-cyan-600 dark:text-cyan-300', icon: Sparkles },
+    { id: 'capsules', title: 'Time Capsule', subtitle: 'Seal letters & media for future dates', accent: 'text-amber-600 dark:text-amber-300', icon: Clock },
+    { id: 'wisdom', title: "Stranger's Wisdom", subtitle: 'Anonymous advice & life lessons', accent: 'text-violet-600 dark:text-violet-300', icon: Feather },
+    { id: 'skillswap', title: 'SkillSwap', subtitle: 'Mutual learning & live chat', accent: 'text-emerald-600 dark:text-emerald-300', icon: Repeat },
+    { id: 'objects', title: 'Life Behind Objects', subtitle: 'Heirloom stories & QR provenance', accent: 'text-rose-600 dark:text-rose-300', icon: Watch },
+    { id: 'dreams', title: 'Dream Archive', subtitle: 'Dreams, vividness & patterns', accent: 'text-indigo-600 dark:text-indigo-300', icon: Moon },
+    { id: 'humanity', title: 'Humanity Feed', subtitle: 'Global anonymous reflections', accent: 'text-teal-600 dark:text-teal-300', icon: HeartHandshake },
   ];
 
   if (loading && !data) {
     return (
       <div className="space-y-6">
-        <div className="h-44 rounded-2xl bg-white/[0.04] animate-pulse" />
+        <div className="h-44 rounded-2xl bg-tint animate-pulse" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-          <div className="h-52 rounded-2xl bg-white/[0.04] animate-pulse lg:col-span-2" />
-          <div className="h-52 rounded-2xl bg-white/[0.04] animate-pulse" />
+          <div className="h-52 rounded-2xl bg-tint animate-pulse lg:col-span-2" />
+          <div className="h-52 rounded-2xl bg-tint animate-pulse" />
         </div>
       </div>
     );
@@ -187,8 +187,8 @@ export function HomeDashboard() {
 
   return (
     <div className="space-y-6 sm:space-y-8 min-w-0 w-full">
-      {/* Greeting & Real Archive Summary */}
-      <section className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0D1424] w-full">
+      {/* Greeting & Real Archive Summary (dark photo scrim keeps white text legible in all themes) */}
+      <section className="relative overflow-hidden rounded-2xl border border-hairline bg-[#0D1424] w-full">
         <SafeImage
           src="/src/assets/images/echo_hero_cosmos_1795260972427.jpg"
           alt="Midnight sky and glowing memory trails"
@@ -231,7 +231,7 @@ export function HomeDashboard() {
       </section>
 
       {error && (
-        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-200">
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-700 dark:text-rose-200">
           {error}
         </div>
       )}
@@ -241,15 +241,15 @@ export function HomeDashboard() {
         {/* Quick Memory Capture */}
         <form
           onSubmit={handleQuickCapture}
-          className="lg:col-span-5 rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 flex flex-col justify-between space-y-4"
+          className="lg:col-span-5 rounded-2xl border border-hairline bg-surface p-6 flex flex-col justify-between space-y-4 min-w-0"
         >
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h2 className="font-display text-lg font-semibold text-white">Quick Memory Capture</h2>
+              <h2 className="font-display text-lg font-semibold text-ink">Quick Memory Capture</h2>
               <button
                 type="button"
                 onClick={() => setQuickCaptureTarget('memory')}
-                className="text-xs font-medium text-sky-300 hover:text-sky-200 whitespace-nowrap shrink-0"
+                className="text-xs font-medium text-sky-600 dark:text-sky-300 hover:underline whitespace-nowrap shrink-0"
               >
                 Full Editor
               </button>
@@ -259,14 +259,14 @@ export function HomeDashboard() {
               value={quickTitle}
               onChange={(e) => setQuickTitle(e.target.value)}
               placeholder="Give this moment a title (optional)"
-              className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
+              className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-sky-400"
             />
             <textarea
               rows={4}
               value={quickText}
               onChange={(e) => setQuickText(e.target.value)}
               placeholder="Write what happened, who was there, or how tonight felt..."
-              className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-400 resize-none"
+              className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-sky-400 resize-none"
             />
           </div>
 
@@ -281,58 +281,58 @@ export function HomeDashboard() {
         </form>
 
         {/* Featured Memory or Genuine Onboarding Empty State */}
-        <div className="lg:col-span-7 rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 flex flex-col justify-between">
+        <div className="lg:col-span-7 rounded-2xl border border-hairline bg-surface p-6 flex flex-col justify-between min-w-0">
           {data?.featuredMemory ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4">
-                <span className="text-xs font-medium text-sky-300">
+                <span className="text-xs font-medium text-sky-600 dark:text-sky-300">
                   Featured Memory · {data.featuredMemory.category} · {data.featuredMemory.memory_date}
                 </span>
                 <button
                   type="button"
                   onClick={() => navigateTo('memories', data.featuredMemory!.id)}
-                  className="text-xs font-medium text-slate-300 hover:text-white inline-flex items-center gap-1 whitespace-nowrap shrink-0"
+                  className="text-xs font-medium text-ink-secondary hover:text-ink inline-flex items-center gap-1 whitespace-nowrap shrink-0"
                 >
                   Open Archive <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
-              <h3 className="font-display text-2xl font-bold text-white">{data.featuredMemory.title}</h3>
-              <p className="text-sm text-slate-300 leading-relaxed line-clamp-5 whitespace-pre-wrap">
+              <h3 className="font-display text-2xl font-bold text-ink">{data.featuredMemory.title}</h3>
+              <p className="text-sm text-ink-secondary leading-relaxed line-clamp-5 whitespace-pre-wrap">
                 {data.featuredMemory.content}
               </p>
-              <div className="text-xs text-slate-400 pt-2">
+              <div className="text-xs text-ink-muted pt-2">
                 Mood: {data.featuredMemory.mood}
                 {data.featuredMemory.location_name ? ` · ${data.featuredMemory.location_name}` : ''}
               </div>
             </div>
           ) : (
             <div className="space-y-4 my-auto py-4">
-              <p className="text-xs font-medium text-sky-300">Your archive begins here</p>
-              <h3 className="font-display text-2xl font-bold text-white [text-wrap:balance]">
+              <p className="text-xs font-medium text-sky-600 dark:text-sky-300">Your archive begins here</p>
+              <h3 className="font-display text-2xl font-bold text-ink [text-wrap:balance]">
                 No memories recorded yet — only yours will ever live here.
               </h3>
-              <p className="text-sm text-slate-300 leading-relaxed max-w-xl">
+              <p className="text-sm text-ink-secondary leading-relaxed max-w-xl">
                 ECHO never fills your personal timeline with synthetic entries. Capture a memory on the left, seal a Time Capsule for next year, record a dream, or preserve the story of a meaningful family object.
               </p>
               <div className="flex flex-wrap gap-3 pt-2">
                 <button
                   type="button"
                   onClick={() => setQuickCaptureTarget('capsule')}
-                  className="inline-flex items-center gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2 text-xs font-medium text-amber-200 hover:bg-amber-400/20 transition-colors min-h-[40px]"
+                  className="inline-flex items-center gap-2 rounded-xl border border-amber-500/35 bg-amber-500/10 px-4 py-2 text-xs font-medium text-amber-800 dark:text-amber-200 hover:bg-amber-500/20 transition-colors min-h-[40px]"
                 >
                   <Clock className="w-4 h-4" /> Create Time Capsule
                 </button>
                 <button
                   type="button"
                   onClick={() => setQuickCaptureTarget('object')}
-                  className="inline-flex items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-2 text-xs font-medium text-rose-200 hover:bg-rose-400/20 transition-colors min-h-[40px]"
+                  className="inline-flex items-center gap-2 rounded-xl border border-rose-500/35 bg-rose-500/10 px-4 py-2 text-xs font-medium text-rose-800 dark:text-rose-200 hover:bg-rose-500/20 transition-colors min-h-[40px]"
                 >
                   <Watch className="w-4 h-4" /> Preserve an Object
                 </button>
                 <button
                   type="button"
                   onClick={() => setQuickCaptureTarget('dream')}
-                  className="inline-flex items-center gap-2 rounded-xl border border-indigo-400/30 bg-indigo-400/10 px-4 py-2 text-xs font-medium text-indigo-200 hover:bg-indigo-400/20 transition-colors min-h-[40px]"
+                  className="inline-flex items-center gap-2 rounded-xl border border-indigo-500/35 bg-indigo-500/10 px-4 py-2 text-xs font-medium text-indigo-800 dark:text-indigo-200 hover:bg-indigo-500/20 transition-colors min-h-[40px]"
                 >
                   <Moon className="w-4 h-4" /> Record a Dream
                 </button>
@@ -341,14 +341,14 @@ export function HomeDashboard() {
           )}
 
           {data && data.onThisDay.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-white/[0.08] flex items-center justify-between gap-4">
-              <div className="text-xs text-slate-300">
-                <span className="text-cyan-300 font-medium">On This Day:</span> {data.onThisDay[0].title} ({data.onThisDay[0].memory_date})
+            <div className="mt-6 pt-4 border-t border-hairline flex items-center justify-between gap-4">
+              <div className="text-xs text-ink-secondary">
+                <span className="text-cyan-700 dark:text-cyan-300 font-medium">On This Day:</span> {data.onThisDay[0].title} ({data.onThisDay[0].memory_date})
               </div>
               <button
                 type="button"
                 onClick={() => navigateTo('memories')}
-                className="text-xs text-cyan-300 hover:underline whitespace-nowrap shrink-0"
+                className="text-xs text-cyan-700 dark:text-cyan-300 hover:underline whitespace-nowrap shrink-0"
               >
                 Revisit
               </button>
@@ -359,38 +359,38 @@ export function HomeDashboard() {
 
       {/* Time Capsule Countdown + ECHO AI Assistant */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        <div className="lg:col-span-5 rounded-2xl border border-white/[0.08] bg-[#0D1424] overflow-hidden flex flex-col justify-between">
+        <div className="lg:col-span-5 rounded-2xl border border-hairline bg-surface overflow-hidden flex flex-col justify-between min-w-0">
           <div className="relative h-36">
             <SafeImage
               src="/src/assets/images/echo_capsule_vault_1795260972711.jpg"
               alt="Sealed titanium and amber glass time capsule"
               className="w-full h-full object-cover"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-[#0D1424] via-[#0D1424]/40 to-transparent" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
           </div>
-          <div className="p-6 pt-2 space-y-3">
+          <div className="p-6 pt-3 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-amber-300">Time Capsule Vault</span>
+              <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Time Capsule Vault</span>
               {data && data.stats.readyCapsules > 0 && (
-                <span className="text-xs font-medium text-emerald-300">
+                <span className="text-xs font-medium text-emerald-700 dark:text-emerald-300">
                   {data.stats.readyCapsules} ready to open
                 </span>
               )}
             </div>
             {data?.nextCapsule ? (
               <>
-                <h3 className="font-display text-lg font-semibold text-white">{data.nextCapsule.title}</h3>
-                <div className="font-mono text-2xl font-semibold text-amber-300 tabular-nums">
+                <h3 className="font-display text-lg font-semibold text-ink">{data.nextCapsule.title}</h3>
+                <div className="font-mono text-2xl font-semibold text-amber-700 dark:text-amber-300 tabular-nums">
                   {formatCountdown(data.nextCapsule.unlock_at)}
                 </div>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-ink-muted">
                   Sealed until {new Date(data.nextCapsule.unlock_at).toLocaleDateString()} · {data.nextCapsule.unlock_occasion.replace('_', ' ')}
                 </p>
               </>
             ) : (
               <>
-                <h3 className="font-display text-lg font-semibold text-white">Send a letter to your future self</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
+                <h3 className="font-display text-lg font-semibold text-ink">Send a letter to your future self</h3>
+                <p className="text-xs text-ink-muted leading-relaxed">
                   Lock text, photos, or voice notes on the server until a birthday, graduation, or custom date.
                 </p>
               </>
@@ -398,7 +398,7 @@ export function HomeDashboard() {
             <button
               type="button"
               onClick={() => navigateTo('capsules')}
-              className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-300 hover:text-amber-200 pt-1"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-300 hover:underline pt-1"
             >
               Open Time Capsules <ArrowRight className="w-3.5 h-3.5" />
             </button>
@@ -406,20 +406,20 @@ export function HomeDashboard() {
         </div>
 
         {/* ECHO AI Assistant Quick Launcher */}
-        <div className="lg:col-span-7 rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 flex flex-col justify-between space-y-5">
+        <div className="lg:col-span-7 rounded-2xl border border-hairline bg-surface p-6 flex flex-col justify-between space-y-5 min-w-0">
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-cyan-300">ECHO AI Life Memory</span>
+              <span className="text-xs font-medium text-cyan-700 dark:text-cyan-300">ECHO AI Life Memory</span>
               <button
                 type="button"
                 onClick={() => navigateTo('ai')}
-                className="text-xs text-slate-300 hover:text-white whitespace-nowrap shrink-0"
+                className="text-xs text-ink-secondary hover:text-ink whitespace-nowrap shrink-0"
               >
                 Open Full Conversation
               </button>
             </div>
-            <h3 className="font-display text-xl font-bold text-white">Ask your real archive anything</h3>
-            <p className="text-sm text-slate-400">
+            <h3 className="font-display text-xl font-bold text-ink">Ask your real archive anything</h3>
+            <p className="text-sm text-ink-muted">
               Grounded strictly in memories you allow AI to read. Facts are separated from personal reflection, and missing memories are never invented.
             </p>
           </div>
@@ -440,7 +440,7 @@ export function HomeDashboard() {
               value={aiQuestion}
               onChange={(e) => setAiQuestion(e.target.value)}
               placeholder="Ask about your memories, places, or past year..."
-              className="flex-1 min-w-0 rounded-xl border border-white/10 bg-[#070B14] px-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-400"
+              className="flex-1 min-w-0 rounded-xl border border-hairline-strong bg-inset px-4 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-cyan-400"
             />
             <button
               type="submit"
@@ -461,7 +461,7 @@ export function HomeDashboard() {
                 key={prompt}
                 type="button"
                 onClick={() => navigateTo('ai', prompt)}
-                className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-xs text-slate-300 hover:bg-white/[0.08] hover:text-white transition-colors"
+                className="rounded-lg border border-hairline bg-tint px-3 py-1.5 text-xs text-ink-secondary hover:bg-tint-hover hover:text-ink transition-colors"
               >
                 {prompt}
               </button>
@@ -473,11 +473,11 @@ export function HomeDashboard() {
       {/* Seven Integrated Modules Grid */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold text-white">Explore All ECHO Systems</h2>
+          <h2 className="font-display text-lg font-semibold text-ink">Explore All ECHO Systems</h2>
           <button
             type="button"
             onClick={() => navigateTo('discover')}
-            className="text-xs text-slate-400 hover:text-white inline-flex items-center gap-1"
+            className="text-xs text-ink-muted hover:text-ink inline-flex items-center gap-1"
           >
             <Compass className="w-3.5 h-3.5" /> Discovery Hub
           </button>
@@ -491,12 +491,12 @@ export function HomeDashboard() {
                 key={mod.id}
                 type="button"
                 onClick={() => navigateTo(mod.id)}
-                className="text-left rounded-2xl border border-white/[0.08] bg-[#0D1424] hover:border-white/20 hover:bg-[#111A2E] p-5 transition-colors flex flex-col justify-between space-y-4 min-h-[120px]"
+                className="text-left rounded-2xl border border-hairline bg-surface hover:border-hairline-strong hover:bg-surface-raised p-5 transition-colors flex flex-col justify-between space-y-4 min-h-[120px]"
               >
                 <Icon className={`w-5 h-5 ${mod.accent}`} />
                 <div>
-                  <div className="font-display text-sm font-semibold text-white">{mod.title}</div>
-                  <div className="text-xs text-slate-400 mt-1">{mod.subtitle}</div>
+                  <div className="font-display text-sm font-semibold text-ink">{mod.title}</div>
+                  <div className="text-xs text-ink-muted mt-1">{mod.subtitle}</div>
                 </div>
               </button>
             );
@@ -506,83 +506,83 @@ export function HomeDashboard() {
 
       {/* Recent Memories + Humanity Highlights + SkillSwap Discovery */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <section className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 space-y-4">
+        <section className="rounded-2xl border border-hairline bg-surface p-6 space-y-4 min-w-0">
           <div className="flex items-center justify-between">
-            <h3 className="font-display text-base font-semibold text-white">Recent Memories</h3>
+            <h3 className="font-display text-base font-semibold text-ink">Recent Memories</h3>
             <button
               type="button"
               onClick={() => navigateTo('memories')}
-              className="text-xs text-sky-300 hover:underline"
+              className="text-xs text-sky-600 dark:text-sky-300 hover:underline"
             >
               View all
             </button>
           </div>
           {data && data.recentMemories.length > 0 ? (
-            <div className="divide-y divide-white/[0.06]">
+            <div className="divide-y divide-hairline">
               {data.recentMemories.map((m) => (
                 <button
                   key={m.id}
                   type="button"
                   onClick={() => navigateTo('memories', m.id)}
-                  className="w-full text-left py-3 first:pt-0 last:pb-0 hover:text-sky-200 transition-colors"
+                  className="w-full text-left py-3 first:pt-0 last:pb-0 hover:opacity-80 transition-opacity"
                 >
-                  <div className="text-sm font-medium text-white truncate">{m.title}</div>
-                  <div className="text-xs text-slate-400 mt-0.5 font-mono tabular-nums">
+                  <div className="text-sm font-medium text-ink truncate">{m.title}</div>
+                  <div className="text-xs text-ink-muted mt-0.5 font-mono tabular-nums">
                     {m.memory_date} · {m.category}
                   </div>
                 </button>
               ))}
             </div>
           ) : (
-            <p className="text-xs text-slate-400">Your recent memories will appear here once saved.</p>
+            <p className="text-xs text-ink-muted">Your recent memories will appear here once saved.</p>
           )}
         </section>
 
-        <section className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 space-y-4">
+        <section className="rounded-2xl border border-hairline bg-surface p-6 space-y-4 min-w-0">
           <div className="flex items-center justify-between">
-            <h3 className="font-display text-base font-semibold text-white">Humanity Highlights</h3>
+            <h3 className="font-display text-base font-semibold text-ink">Humanity Highlights</h3>
             <button
               type="button"
               onClick={() => navigateTo('humanity')}
-              className="text-xs text-teal-300 hover:underline"
+              className="text-xs text-teal-700 dark:text-teal-300 hover:underline"
             >
               Open Feed
             </button>
           </div>
           {data && data.humanityHighlights.length > 0 ? (
-            <div className="divide-y divide-white/[0.06]">
+            <div className="divide-y divide-hairline">
               {data.humanityHighlights.map((h) => (
                 <button
                   key={h.id}
                   type="button"
                   onClick={() => navigateTo('humanity')}
-                  className="w-full text-left py-3 first:pt-0 last:pb-0 hover:text-teal-200 transition-colors"
+                  className="w-full text-left py-3 first:pt-0 last:pb-0 hover:opacity-80 transition-opacity"
                 >
-                  <div className="text-sm font-medium text-white line-clamp-1">{h.title}</div>
-                  <div className="text-xs text-slate-400 mt-0.5">
+                  <div className="text-sm font-medium text-ink line-clamp-1">{h.title}</div>
+                  <div className="text-xs text-ink-muted mt-0.5">
                     {h.category} · {h.approx_region} · {h.helpful_count} helpful
                   </div>
                 </button>
               ))}
             </div>
           ) : (
-            <p className="text-xs text-slate-400">Anonymous stories shared by the community will appear here.</p>
+            <p className="text-xs text-ink-muted">Anonymous stories shared by the community will appear here.</p>
           )}
         </section>
 
-        <section className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 space-y-4">
+        <section className="rounded-2xl border border-hairline bg-surface p-6 space-y-4 min-w-0">
           <div className="flex items-center justify-between">
-            <h3 className="font-display text-base font-semibold text-white">SkillSwap People</h3>
+            <h3 className="font-display text-base font-semibold text-ink">SkillSwap People</h3>
             <button
               type="button"
               onClick={() => navigateTo('skillswap')}
-              className="text-xs text-emerald-300 hover:underline"
+              className="text-xs text-emerald-700 dark:text-emerald-300 hover:underline"
             >
               Discover
             </button>
           </div>
           {data && data.skillDiscovery.length > 0 ? (
-            <div className="divide-y divide-white/[0.06]">
+            <div className="divide-y divide-hairline">
               {data.skillDiscovery.map((s) => {
                 const teaches = (() => {
                   try {
@@ -596,10 +596,10 @@ export function HomeDashboard() {
                     key={s.user_id}
                     type="button"
                     onClick={() => navigateTo('skillswap')}
-                    className="w-full text-left py-3 first:pt-0 last:pb-0 hover:text-emerald-200 transition-colors"
+                    className="w-full text-left py-3 first:pt-0 last:pb-0 hover:opacity-80 transition-opacity"
                   >
-                    <div className="text-sm font-medium text-white">{s.display_name}</div>
-                    <div className="text-xs text-slate-400 mt-0.5 truncate">
+                    <div className="text-sm font-medium text-ink">{s.display_name}</div>
+                    <div className="text-xs text-ink-muted mt-0.5 truncate">
                       Teaches: {teaches || 'Open to collaborate'} · {s.mode}
                     </div>
                   </button>
@@ -607,7 +607,7 @@ export function HomeDashboard() {
               })}
             </div>
           ) : (
-            <p className="text-xs text-slate-400">Skill profiles published by members will appear here.</p>
+            <p className="text-xs text-ink-muted">Skill profiles published by members will appear here.</p>
           )}
         </section>
       </div>

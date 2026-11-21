@@ -20,10 +20,10 @@ function EchoAppContent() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#070B14] flex items-center justify-center">
+      <div className="min-h-screen bg-transparent text-ink flex items-center justify-center">
         <div className="space-y-2 text-center">
-          <div className="font-display text-2xl font-bold text-white tracking-tight">ECHO</div>
-          <div className="text-xs text-slate-400">Connecting to your archive...</div>
+          <div className="font-display text-2xl font-bold text-ink tracking-tight">ECHO</div>
+          <div className="text-xs text-ink-muted">Connecting to your archive...</div>
         </div>
       </div>
     );

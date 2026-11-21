@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   BookOpen,
+  Check,
   Clock,
   Download,
   Feather,
@@ -8,6 +9,7 @@ import {
   KeyRound,
   LogOut,
   Moon,
+  Palette,
   Repeat,
   ShieldCheck,
   Sparkles,
@@ -16,6 +18,7 @@ import {
 } from 'lucide-react';
 import { useEcho } from '../context/EchoContext';
 import { apiRequest } from '../lib/api';
+import { ECHO_THEMES } from '../lib/themes';
 import type { ModuleId } from '../types/echo';
 import { AuthMedia, MediaPicker } from './MediaElements';
 
@@ -33,56 +36,56 @@ export function DiscoverHub() {
       id: 'ai',
       title: 'AI Life Memory',
       description: 'Ask grounded questions across your memories, dreams, and objects.',
-      accent: 'text-cyan-300',
+      accent: 'text-cyan-600 dark:text-cyan-300',
       icon: Sparkles,
     },
     {
       id: 'capsules',
       title: 'Time Capsule Vault',
       description: 'Seal letters, promises, and voice notes for future milestones.',
-      accent: 'text-amber-300',
+      accent: 'text-amber-600 dark:text-amber-300',
       icon: Clock,
     },
     {
       id: 'wisdom',
       title: "Stranger's Wisdom",
       description: 'Exchange anonymous life lessons and advice without identity exposure.',
-      accent: 'text-violet-300',
+      accent: 'text-violet-600 dark:text-violet-300',
       icon: Feather,
     },
     {
       id: 'skillswap',
       title: 'SkillSwap',
       description: 'Trade skills directly with mutually matched partners and live chat.',
-      accent: 'text-emerald-300',
+      accent: 'text-emerald-600 dark:text-emerald-300',
       icon: Repeat,
     },
     {
       id: 'objects',
       title: 'Life Behind Objects',
       description: 'Document heirloom lineage, attach voice stories, and generate QR tags.',
-      accent: 'text-rose-300',
+      accent: 'text-rose-600 dark:text-rose-300',
       icon: Watch,
     },
     {
       id: 'dreams',
       title: 'Dream Archive',
       description: 'Log dreams, vividness, recurring symbols, and reflective prompts.',
-      accent: 'text-indigo-300',
+      accent: 'text-indigo-600 dark:text-indigo-300',
       icon: Moon,
     },
     {
       id: 'humanity',
       title: 'Humanity Feed',
       description: 'Read and share anonymous moments of kindness across global regions.',
-      accent: 'text-teal-300',
+      accent: 'text-teal-600 dark:text-teal-300',
       icon: HeartHandshake,
     },
     {
       id: 'memories',
       title: 'ECHO Memory',
       description: 'Browse your timeline, calendar, map, collections, and slideshows.',
-      accent: 'text-sky-300',
+      accent: 'text-sky-600 dark:text-sky-300',
       icon: BookOpen,
     },
   ];
@@ -90,8 +93,8 @@ export function DiscoverHub() {
   return (
     <div className="space-y-6 min-w-0 w-full">
       <div>
-        <h1 className="font-display text-2xl sm:text-3xl font-bold text-white">Discover ECHO</h1>
-        <p className="text-sm text-slate-400">
+        <h1 className="font-display text-2xl sm:text-3xl font-bold text-ink">Discover ECHO</h1>
+        <p className="text-sm text-ink-muted">
           Every module shares your single account, privacy preferences, search index, and real-time sync.
         </p>
       </div>
@@ -103,11 +106,11 @@ export function DiscoverHub() {
               key={d.id}
               type="button"
               onClick={() => navigateTo(d.id)}
-              className="text-left rounded-2xl border border-white/[0.08] bg-[#0D1424] hover:border-white/20 hover:bg-[#111A2E] p-6 space-y-3 transition-colors"
+              className="text-left rounded-2xl border border-hairline bg-surface hover:border-hairline-strong hover:bg-surface-raised p-6 space-y-3 transition-colors"
             >
               <Icon className={`w-6 h-6 ${d.accent}`} />
-              <div className="font-display text-base font-bold text-white">{d.title}</div>
-              <p className="text-xs text-slate-400 leading-relaxed">{d.description}</p>
+              <div className="font-display text-base font-bold text-ink">{d.title}</div>
+              <p className="text-xs text-ink-muted leading-relaxed">{d.description}</p>
             </button>
           );
         })}
@@ -117,7 +120,7 @@ export function DiscoverHub() {
 }
 
 export function ProfileSettingsView() {
-  const { user, refreshUser, logout } = useEcho();
+  const { user, theme, setTheme, refreshUser, logout } = useEcho();
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [bio, setBio] = useState(user?.bio || '');
   const [locationHint, setLocationHint] = useState(user?.locationHint || '');
@@ -159,6 +162,7 @@ export function ProfileSettingsView() {
           bio,
           locationHint,
           timezone,
+          theme,
           aiConsent,
           avatarMediaId,
           notificationPrefs: notifPrefs,
@@ -213,42 +217,126 @@ export function ProfileSettingsView() {
     <div className="space-y-6 max-w-4xl mx-auto min-w-0 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-w-0">
         <div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-white">Profile & Privacy</h1>
-          <p className="text-sm text-slate-400">{user?.email}</p>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-ink">Profile & Privacy</h1>
+          <p className="text-sm text-ink-muted">{user?.email}</p>
         </div>
         <button
           type="button"
           onClick={() => void logout()}
-          className="inline-flex items-center gap-2 rounded-xl border border-white/12 bg-[#0D1424] px-4 py-2 text-xs font-medium text-slate-200 hover:bg-white/[0.06] whitespace-nowrap shrink-0"
+          className="inline-flex items-center gap-2 rounded-xl border border-hairline-strong bg-surface px-4 py-2 text-xs font-medium text-ink-secondary hover:text-ink hover:bg-tint-hover whitespace-nowrap shrink-0"
         >
           <LogOut className="w-4 h-4" /> Sign Out
         </button>
       </div>
 
       {notice && (
-        <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2.5 text-xs text-emerald-100">
+        <div className="rounded-xl border border-emerald-500/35 bg-emerald-500/10 px-4 py-2.5 text-xs text-emerald-800 dark:text-emerald-100">
           {notice}
         </div>
       )}
       {error && (
-        <div className="rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-2.5 text-xs text-rose-100">
+        <div className="rounded-xl border border-rose-500/35 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-800 dark:text-rose-100">
           {error}
         </div>
       )}
 
-      <form onSubmit={handleSaveProfile} className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 space-y-5">
+      {/* Custom Themes & Frosted Glass Gallery */}
+      <section className="rounded-2xl border border-hairline bg-surface p-5 sm:p-6 space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h2 className="font-display text-base font-bold text-ink inline-flex items-center gap-2">
+              <Palette className="w-4 h-4 text-sky-600 dark:text-sky-300" /> Appearance & Custom Themes
+            </h2>
+            <p className="text-xs text-ink-muted mt-0.5">
+              Switch between Obsidian, Frosted Glass panes, Nordic Aurora, Amber Hearth, and Nebula Dusk. Synced across devices.
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {ECHO_THEMES.map((t) => {
+            const active = theme === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => void setTheme(t.id)}
+                className={`touch-manipulation text-left rounded-xl border p-3.5 space-y-3 transition-all ${
+                  active
+                    ? 'border-sky-400 bg-sky-500/10 ring-1 ring-sky-400/40'
+                    : 'border-hairline bg-inset hover:border-hairline-strong'
+                }`}
+              >
+                {/* Live Theme Preview Box */}
+                <div
+                  className="relative h-16 rounded-lg overflow-hidden border border-white/15 p-2 flex flex-col justify-between"
+                  style={{
+                    background: t.isGlass
+                      ? `radial-gradient(circle at 20% 20%, ${t.swatches.accent}44, transparent 60%), radial-gradient(circle at 85% 80%, ${t.swatches.secondary}44, transparent 60%), ${t.swatches.canvas}`
+                      : t.swatches.canvas,
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span
+                      className="h-1.5 w-10 rounded-full"
+                      style={{ backgroundColor: t.swatches.accent }}
+                    />
+                    {t.isGlass && (
+                      <span
+                        className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                        style={{
+                          backgroundColor: t.swatches.surface,
+                          color: t.isDark ? '#E2E8F0' : '#0F172A',
+                          backdropFilter: 'blur(8px)',
+                        }}
+                      >
+                        Frosted Glass
+                      </span>
+                    )}
+                  </div>
+                  <div
+                    className="h-6 rounded-md border flex items-center px-2 gap-1.5"
+                    style={{
+                      backgroundColor: t.swatches.surface,
+                      borderColor: t.isDark ? 'rgba(255,255,255,0.16)' : 'rgba(15,23,42,0.12)',
+                      backdropFilter: t.isGlass ? 'blur(10px)' : 'none',
+                    }}
+                  >
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.swatches.accent }} />
+                    <span className="w-12 h-1.5 rounded-full opacity-40" style={{ backgroundColor: t.isDark ? '#F8FAFC' : '#0F172A' }} />
+                  </div>
+                </div>
+
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="font-display text-sm font-semibold text-ink truncate">{t.name}</div>
+                    <p className="text-[11px] text-ink-muted leading-snug mt-0.5">{t.tagline}</p>
+                  </div>
+                  {active && (
+                    <span className="w-5 h-5 rounded-full bg-sky-400 text-slate-950 flex items-center justify-center shrink-0">
+                      <Check className="w-3.5 h-3.5" />
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      <form onSubmit={handleSaveProfile} className="rounded-2xl border border-hairline bg-surface p-6 space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <div className="w-16 h-16 rounded-2xl overflow-hidden bg-[#070B14] border border-white/10 flex items-center justify-center shrink-0">
+          <div className="w-16 h-16 rounded-2xl overflow-hidden bg-inset border border-hairline-strong flex items-center justify-center shrink-0">
             {avatarMediaId ? (
               <AuthMedia mediaId={avatarMediaId} className="w-full h-full object-cover" />
             ) : (
-              <span className="font-display text-xl font-bold text-sky-300">
+              <span className="font-display text-xl font-bold text-sky-600 dark:text-sky-300">
                 {(user?.displayName || 'E').slice(0, 1).toUpperCase()}
               </span>
             )}
           </div>
           <div className="space-y-1.5">
-            <div className="text-sm font-semibold text-white">{user?.displayName}</div>
+            <div className="text-sm font-semibold text-ink">{user?.displayName}</div>
             <MediaPicker
               contextType="avatar"
               accept="image/*"
@@ -260,54 +348,54 @@ export function ProfileSettingsView() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs text-slate-400 block mb-1">Display Name</label>
+            <label className="text-xs text-ink-muted block mb-1">Display Name</label>
             <input
               type="text"
               required
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+              className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
             />
           </div>
           <div>
-            <label className="text-xs text-slate-400 block mb-1">Timezone</label>
+            <label className="text-xs text-ink-muted block mb-1">Timezone</label>
             <input
               type="text"
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white font-mono"
+              className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink font-mono"
             />
           </div>
           <div className="sm:col-span-2">
-            <label className="text-xs text-slate-400 block mb-1">Location Hint (approximate city/region)</label>
+            <label className="text-xs text-ink-muted block mb-1">Location Hint (approximate city/region)</label>
             <input
               type="text"
               value={locationHint}
               onChange={(e) => setLocationHint(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+              className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
             />
           </div>
           <div className="sm:col-span-2">
-            <label className="text-xs text-slate-400 block mb-1">Bio</label>
+            <label className="text-xs text-ink-muted block mb-1">Bio</label>
             <textarea
               rows={3}
               value={bio}
               onChange={(e) => setBio(e.target.value)}
-              className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+              className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
             />
           </div>
         </div>
 
-        <div className="border-t border-white/[0.08] pt-4 space-y-3">
-          <div className="text-xs font-semibold text-white inline-flex items-center gap-1.5">
-            <ShieldCheck className="w-4 h-4 text-cyan-300" /> AI & Notification Preferences
+        <div className="border-t border-hairline pt-4 space-y-3">
+          <div className="text-xs font-semibold text-ink inline-flex items-center gap-1.5">
+            <ShieldCheck className="w-4 h-4 text-cyan-600 dark:text-cyan-300" /> AI & Notification Preferences
           </div>
-          <label className="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer">
+          <label className="flex items-center gap-2.5 text-xs text-ink-secondary cursor-pointer">
             <input
               type="checkbox"
               checked={aiConsent}
               onChange={(e) => setAiConsent(e.target.checked)}
-              className="rounded border-white/20 bg-[#070B14]"
+              className="rounded border-hairline-strong bg-inset"
             />
             Allow ECHO AI to read non-excluded personal memories for reflection and search
           </label>
@@ -318,12 +406,12 @@ export function ProfileSettingsView() {
               ['wisdomReplies', "Stranger's Wisdom replies"],
               ['skillMatches', 'SkillSwap requests & sessions'],
             ].map(([key, label]) => (
-              <label key={key} className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+              <label key={key} className="flex items-center gap-2 text-xs text-ink-secondary cursor-pointer">
                 <input
                   type="checkbox"
                   checked={notifPrefs[key] !== false}
                   onChange={(e) => setNotifPrefs((prev) => ({ ...prev, [key]: e.target.checked }))}
-                  className="rounded border-white/20 bg-[#070B14]"
+                  className="rounded border-hairline-strong bg-inset"
                 />
                 {label}
               </label>
@@ -340,9 +428,9 @@ export function ProfileSettingsView() {
       </form>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <form onSubmit={handleChangePassword} className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 space-y-4">
-          <h2 className="font-display text-base font-bold text-white inline-flex items-center gap-2">
-            <KeyRound className="w-4 h-4 text-sky-400" /> Change Password
+        <form onSubmit={handleChangePassword} className="rounded-2xl border border-hairline bg-surface p-6 space-y-4">
+          <h2 className="font-display text-base font-bold text-ink inline-flex items-center gap-2">
+            <KeyRound className="w-4 h-4 text-sky-600 dark:text-sky-400" /> Change Password
           </h2>
           <input
             type="password"
@@ -350,7 +438,7 @@ export function ProfileSettingsView() {
             value={currentPassword}
             onChange={(e) => setCurrentPassword(e.target.value)}
             placeholder="Current password"
-            className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+            className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
           />
           <input
             type="password"
@@ -359,24 +447,24 @@ export function ProfileSettingsView() {
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             placeholder="New password (8+ characters)"
-            className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+            className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
           />
-          <button type="submit" className="rounded-xl bg-white/[0.08] px-4 py-2 text-xs font-medium text-white hover:bg-white/15">
+          <button type="submit" className="rounded-xl bg-tint px-4 py-2 text-xs font-medium text-ink hover:bg-tint-hover border border-hairline">
             Update Password
           </button>
         </form>
 
-        <div className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 space-y-4">
-          <h2 className="font-display text-base font-bold text-white">Active Sessions & Storage</h2>
-          <div className="text-xs text-slate-400 font-mono tabular-nums">
+        <div className="rounded-2xl border border-hairline bg-surface p-6 space-y-4">
+          <h2 className="font-display text-base font-bold text-ink">Active Sessions & Storage</h2>
+          <div className="text-xs text-ink-muted font-mono tabular-nums">
             Media used: {(storageUsage.totalBytes / (1024 * 1024)).toFixed(2)} MB across {storageUsage.fileCount} file(s)
           </div>
           <div className="space-y-2 max-h-40 overflow-y-auto">
             {sessions.map((s) => (
-              <div key={s.id} className="flex items-center justify-between text-xs border-b border-white/[0.06] pb-2">
+              <div key={s.id} className="flex items-center justify-between text-xs border-b border-hairline pb-2">
                 <div className="truncate pr-2">
-                  <div className="text-slate-200 truncate">{s.deviceLabel}</div>
-                  <div className="text-[11px] text-slate-500 font-mono">
+                  <div className="text-ink-secondary truncate">{s.deviceLabel}</div>
+                  <div className="text-[11px] text-ink-muted font-mono">
                     {s.isCurrent ? 'Current session' : new Date(s.createdAt).toLocaleDateString()}
                   </div>
                 </div>
@@ -384,7 +472,7 @@ export function ProfileSettingsView() {
                   <button
                     type="button"
                     onClick={() => void handleRevokeSession(s.id)}
-                    className="text-rose-300 hover:underline shrink-0"
+                    className="text-rose-600 dark:text-rose-300 hover:underline shrink-0"
                   >
                     Revoke
                   </button>
@@ -396,10 +484,10 @@ export function ProfileSettingsView() {
       </div>
 
       {/* Data Export & Account Deletion */}
-      <div className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="rounded-2xl border border-hairline bg-surface p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
-          <h2 className="font-display text-base font-bold text-white">Archive Export & Account Deletion</h2>
-          <p className="text-xs text-slate-400">
+          <h2 className="font-display text-base font-bold text-ink">Archive Export & Account Deletion</h2>
+          <p className="text-xs text-ink-muted">
             Download all your personal records as JSON, or permanently erase your account and uploaded media.
           </p>
         </div>
@@ -407,7 +495,7 @@ export function ProfileSettingsView() {
           <button
             type="button"
             onClick={() => void handleExportAll()}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 px-4 py-2 text-xs font-medium text-white hover:bg-white/[0.06]"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-hairline-strong px-4 py-2 text-xs font-medium text-ink hover:bg-tint"
           >
             <Download className="w-4 h-4" /> Export Archive
           </button>
@@ -415,7 +503,7 @@ export function ProfileSettingsView() {
             <button
               type="button"
               onClick={() => setConfirmDelete(true)}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/35 bg-rose-500/10 px-4 py-2 text-xs font-medium text-rose-200"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/35 bg-rose-500/10 px-4 py-2 text-xs font-medium text-rose-700 dark:text-rose-200"
             >
               <Trash2 className="w-4 h-4" /> Delete Account
             </button>

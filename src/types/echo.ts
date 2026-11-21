@@ -1,3 +1,5 @@
+import type { EchoThemeId } from '../lib/themes';
+
 export type ModuleId =
   | 'home'
   | 'memories'
@@ -19,6 +21,7 @@ export interface AuthUser {
   avatarMediaId: string | null;
   locationHint: string;
   timezone: string;
+  theme?: EchoThemeId;
   emailVerified: boolean;
   aiConsent: boolean;
   notificationPrefs: Record<string, boolean>;

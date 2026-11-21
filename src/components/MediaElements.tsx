@@ -79,20 +79,20 @@ export function AuthMedia({
 
   if (error) {
     return (
-      <div className="rounded-xl border border-white/10 bg-[#0B1221] p-4 text-xs text-slate-400">
+      <div className="rounded-xl border border-hairline-strong bg-inset p-4 text-xs text-ink-muted">
         {error}
       </div>
     );
   }
 
   if (!objectUrl) {
-    return <div className="h-32 rounded-xl bg-white/[0.04] animate-pulse" />;
+    return <div className="h-32 rounded-xl bg-tint animate-pulse" />;
   }
 
   if (mimeType.startsWith('audio/')) {
     return (
-      <div className={`flex items-center gap-3 rounded-xl border border-white/10 bg-[#0B1221] px-4 py-3 ${className}`}>
-        <Volume2 className="w-4 h-4 text-sky-400 shrink-0" />
+      <div className={`flex items-center gap-3 rounded-xl border border-hairline-strong bg-inset px-4 py-3 ${className}`}>
+        <Volume2 className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
         <audio controls src={objectUrl} className="w-full h-8" />
       </div>
     );
@@ -230,7 +230,7 @@ export function VoiceRecorder({
             type="button"
             onClick={startRecording}
             disabled={uploading || transcribing}
-            className="touch-manipulation inline-flex items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3.5 py-2 text-xs font-medium text-sky-300 hover:bg-sky-500/20 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
+            className="touch-manipulation inline-flex items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 px-3.5 py-2 text-xs font-medium text-sky-700 dark:text-sky-300 hover:bg-sky-500/20 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
           >
             <Mic className="w-4 h-4" />
             Record Voice
@@ -239,23 +239,23 @@ export function VoiceRecorder({
           <button
             type="button"
             onClick={stopRecording}
-            className="touch-manipulation inline-flex items-center gap-2 rounded-lg border border-rose-500/40 bg-rose-500/20 px-3.5 py-2 text-xs font-medium text-rose-200 hover:bg-rose-500/30 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
+            className="touch-manipulation inline-flex items-center gap-2 rounded-lg border border-rose-500/40 bg-rose-500/20 px-3.5 py-2 text-xs font-medium text-rose-700 dark:text-rose-200 hover:bg-rose-500/30 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
           >
             <Square className="w-3.5 h-3.5 fill-current" />
             Stop ({mm}:{ss})
           </button>
         )}
 
-        <label className="touch-manipulation inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-white/[0.08] cursor-pointer transition-colors whitespace-nowrap shrink-0 min-h-[40px]">
-          <FileAudio className="w-4 h-4 text-violet-300" />
+        <label className="touch-manipulation inline-flex items-center gap-2 rounded-lg border border-hairline-strong bg-tint px-3.5 py-2 text-xs font-medium text-ink-secondary hover:bg-tint-hover cursor-pointer transition-colors whitespace-nowrap shrink-0 min-h-[40px]">
+          <FileAudio className="w-4 h-4 text-violet-600 dark:text-violet-300" />
           Upload Audio
           <input type="file" accept="audio/*" onChange={handleAudioFile} className="hidden" />
         </label>
 
-        {uploading && <span className="text-xs text-sky-300">Uploading audio...</span>}
-        {transcribing && <span className="text-xs text-violet-300">Transcribing with ECHO AI...</span>}
+        {uploading && <span className="text-xs text-sky-600 dark:text-sky-300">Uploading audio...</span>}
+        {transcribing && <span className="text-xs text-violet-600 dark:text-violet-300">Transcribing with ECHO AI...</span>}
       </div>
-      {error && <p className="text-xs text-amber-300">{error}</p>}
+      {error && <p className="text-xs text-amber-700 dark:text-amber-300">{error}</p>}
     </div>
   );
 }
@@ -294,12 +294,12 @@ export function MediaPicker({
 
   return (
     <div className="space-y-1.5">
-      <label className="touch-manipulation inline-flex items-center gap-2 rounded-lg border border-white/12 bg-white/[0.04] px-3.5 py-2 text-xs font-medium text-slate-200 hover:bg-white/[0.08] cursor-pointer transition-colors whitespace-nowrap shrink-0 min-h-[40px]">
-        <Upload className="w-4 h-4 text-sky-400" />
+      <label className="touch-manipulation inline-flex items-center gap-2 rounded-lg border border-hairline-strong bg-tint px-3.5 py-2 text-xs font-medium text-ink-secondary hover:bg-tint-hover cursor-pointer transition-colors whitespace-nowrap shrink-0 min-h-[40px]">
+        <Upload className="w-4 h-4 text-sky-500 dark:text-sky-400" />
         {progress !== null ? `Uploading ${progress}%` : label}
         <input type="file" accept={accept} multiple onChange={onChange} className="hidden" />
       </label>
-      {error && <p className="text-xs text-rose-300">{error}</p>}
+      {error && <p className="text-xs text-rose-600 dark:text-rose-300">{error}</p>}
     </div>
   );
 }

@@ -211,12 +211,12 @@ export function SkillSwapModule() {
     <div className="space-y-6 min-w-0 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-w-0">
         <div className="min-w-0">
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-white">SkillSwap</h1>
-          <p className="text-sm text-slate-400">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-ink">SkillSwap</h1>
+          <p className="text-sm text-ink-muted">
             Trade knowledge directly with people whose skills complement yours — real-time chat, scheduling, and mutual completion.
           </p>
         </div>
-        <div className="w-full sm:w-auto min-w-0 flex items-center gap-1 p-1 rounded-xl bg-[#0D1424] border border-white/[0.08] overflow-x-auto no-scrollbar">
+        <div className="w-full sm:w-auto min-w-0 flex items-center gap-1 p-1 rounded-xl bg-surface border border-hairline overflow-x-auto no-scrollbar">
           {[
             { id: 'discover', label: 'Discover Matches' },
             { id: 'exchanges', label: `Exchanges (${exchanges.length})` },
@@ -227,7 +227,7 @@ export function SkillSwapModule() {
               type="button"
               onClick={() => setTab(t.id as typeof tab)}
               className={`px-3.5 py-2 rounded-lg text-xs font-medium whitespace-nowrap ${
-                tab === t.id ? 'bg-emerald-400 text-slate-950 font-semibold' : 'text-slate-300 hover:text-white'
+                tab === t.id ? 'bg-emerald-400 text-slate-950 font-semibold' : 'text-ink-secondary hover:text-ink'
               }`}
             >
               {t.label}
@@ -237,7 +237,7 @@ export function SkillSwapModule() {
       </div>
 
       {notice && (
-        <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2.5 text-xs text-emerald-100 flex items-center justify-between">
+        <div className="rounded-xl border border-emerald-400/35 bg-emerald-400/10 px-4 py-2.5 text-xs text-emerald-800 dark:text-emerald-100 flex items-center justify-between">
           <span>{notice}</span>
           <button type="button" onClick={() => setNotice(null)}>Dismiss</button>
         </div>
@@ -247,10 +247,10 @@ export function SkillSwapModule() {
       {tab === 'discover' && (
         <div className="space-y-5">
           {myProfile && myProfile.teachSkills.length === 0 && myProfile.learnSkills.length === 0 && (
-            <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/5 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="rounded-2xl border border-emerald-400/35 bg-emerald-400/10 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
-                <div className="text-sm font-semibold text-white">Complete your Skill Profile for automatic mutual matching</div>
-                <div className="text-xs text-slate-300 mt-0.5">
+                <div className="text-sm font-semibold text-ink">Complete your Skill Profile for automatic mutual matching</div>
+                <div className="text-xs text-ink-secondary mt-0.5">
                   Add skills you can teach and skills you want to learn.
                 </div>
               </div>
@@ -266,20 +266,20 @@ export function SkillSwapModule() {
 
           <div className="flex flex-col sm:flex-row gap-3 min-w-0">
             <div className="relative flex-1 min-w-0">
-              <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-ink-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && void loadAll()}
                 placeholder="Search by skill or city..."
-                className="w-full rounded-xl border border-white/10 bg-[#0D1424] pl-10 pr-4 py-2.5 text-sm text-white"
+                className="w-full rounded-xl border border-hairline-strong bg-surface pl-10 pr-4 py-2.5 text-sm text-ink"
               />
             </div>
             <select
               value={modeFilter}
               onChange={(e) => setModeFilter(e.target.value)}
-              className="rounded-xl border border-white/10 bg-[#0D1424] px-3.5 py-2.5 text-xs text-white"
+              className="rounded-xl border border-hairline-strong bg-surface px-3.5 py-2.5 text-xs text-ink"
             >
               <option value="All">All Modes</option>
               <option value="Online">Online</option>
@@ -288,62 +288,62 @@ export function SkillSwapModule() {
             <button
               type="button"
               onClick={() => void loadAll()}
-              className="rounded-xl border border-white/10 bg-[#0D1424] px-4 py-2.5 text-xs font-medium text-emerald-300"
+              className="rounded-xl border border-hairline-strong bg-surface px-4 py-2.5 text-xs font-medium text-emerald-700 dark:text-emerald-300"
             >
               Search
             </button>
           </div>
 
           {listings.length === 0 ? (
-            <div className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-10 text-center space-y-3">
-              <Repeat className="w-8 h-8 text-emerald-300 mx-auto" />
-              <h2 className="font-display text-lg font-semibold text-white">No SkillSwap profiles match yet</h2>
-              <p className="text-sm text-slate-400 max-w-md mx-auto">
+            <div className="rounded-2xl border border-hairline bg-surface p-10 text-center space-y-3">
+              <Repeat className="w-8 h-8 text-emerald-600 dark:text-emerald-300 mx-auto" />
+              <h2 className="font-display text-lg font-semibold text-ink">No SkillSwap profiles match yet</h2>
+              <p className="text-sm text-ink-muted max-w-md mx-auto">
                 Publish your own Skill Profile to connect with community members as they join and share what they teach.
               </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
               {listings.map((person) => (
-              <article key={person.userId} className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 flex flex-col justify-between space-y-4">
+              <article key={person.userId} className="rounded-2xl border border-hairline bg-surface p-6 flex flex-col justify-between space-y-4">
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h2 className="font-display text-lg font-bold text-white">{person.displayName}</h2>
-                      <div className="text-xs text-slate-400">
+                      <h2 className="font-display text-lg font-bold text-ink">{person.displayName}</h2>
+                      <div className="text-xs text-ink-muted">
                         {person.experienceLevel} · {person.mode}
                         {person.locationCity ? ` · ${person.locationCity}` : ''}
                       </div>
                     </div>
                     {person.isMutualMatch && (
-                      <span className="text-xs font-semibold text-emerald-300 inline-flex items-center gap-1 whitespace-nowrap">
+                      <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300 inline-flex items-center gap-1 whitespace-nowrap">
                         <UserCheck className="w-3.5 h-3.5" /> Mutual Match
                       </span>
                     )}
                   </div>
 
-                  {person.bio && <p className="text-xs text-slate-300 leading-relaxed">{person.bio}</p>}
+                  {person.bio && <p className="text-xs text-ink-secondary leading-relaxed">{person.bio}</p>}
 
                   <div className="space-y-2 text-xs pt-1">
                     <div>
-                      <span className="text-emerald-300 font-medium">Teaches: </span>
-                      <span className="text-slate-200">{person.teachSkills.join(' · ') || 'None listed'}</span>
+                      <span className="text-emerald-700 dark:text-emerald-300 font-medium">Teaches: </span>
+                      <span className="text-ink-secondary">{person.teachSkills.join(' · ') || 'None listed'}</span>
                     </div>
                     <div>
-                      <span className="text-sky-300 font-medium">Wants to learn: </span>
-                      <span className="text-slate-200">{person.learnSkills.join(' · ') || 'None listed'}</span>
+                      <span className="text-sky-700 dark:text-sky-300 font-medium">Wants to learn: </span>
+                      <span className="text-ink-secondary">{person.learnSkills.join(' · ') || 'None listed'}</span>
                     </div>
-                    <div className="text-slate-400">
+                    <div className="text-ink-muted">
                       Languages: {person.languages.join(', ')} · Availability: {person.availability}
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-3 border-t border-white/[0.06]">
+                <div className="flex items-center justify-between pt-3 border-t border-hairline">
                   <button
                     type="button"
                     onClick={() => void handleBlockUser(person.userId)}
-                    className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-rose-300"
+                    className="inline-flex items-center gap-1 text-xs text-ink-muted hover:text-rose-600 dark:hover:text-rose-300"
                   >
                     <ShieldBan className="w-3.5 h-3.5" /> Block
                   </button>
@@ -371,7 +371,7 @@ export function SkillSwapModule() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className={`${activeExchange ? 'lg:col-span-6' : 'lg:col-span-12'} space-y-4`}>
             {exchanges.length === 0 ? (
-              <div className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-10 text-center text-sm text-slate-400">
+              <div className="rounded-2xl border border-hairline bg-surface p-10 text-center text-sm text-ink-muted">
                 No skill exchanges yet. Discover matches to propose your first trade.
               </div>
             ) : (
@@ -386,20 +386,20 @@ export function SkillSwapModule() {
                     key={ex.id}
                     className={`rounded-2xl border p-5 space-y-3 ${
                       activeExchange?.id === ex.id
-                        ? 'border-emerald-400/50 bg-[#101C26]'
-                        : 'border-white/[0.08] bg-[#0D1424]'
+                        ? 'border-emerald-400/50 bg-surface-raised'
+                        : 'border-hairline bg-surface'
                     }`}
                   >
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-white">{partnerName}</span>
-                      <span className="font-mono uppercase text-emerald-300">{ex.status}</span>
+                      <span className="font-semibold text-ink">{partnerName}</span>
+                      <span className="font-mono uppercase text-emerald-700 dark:text-emerald-300">{ex.status}</span>
                     </div>
-                    <div className="text-sm text-slate-200">
+                    <div className="text-sm text-ink-secondary">
                       {ex.offeredSkill} ↔ {ex.requestedSkill}
                     </div>
-                    {ex.message && <p className="text-xs text-slate-400">"{ex.message}"</p>}
+                    {ex.message && <p className="text-xs text-ink-muted">"{ex.message}"</p>}
                     {ex.scheduledAt && (
-                      <div className="text-xs text-cyan-300 font-mono">
+                      <div className="text-xs text-cyan-700 dark:text-cyan-300 font-mono">
                         Scheduled: {new Date(ex.scheduledAt).toLocaleString()}
                       </div>
                     )}
@@ -417,7 +417,7 @@ export function SkillSwapModule() {
                           <button
                             type="button"
                             onClick={() => void handleExchangeAction(ex.id, 'reject')}
-                            className="rounded-lg border border-rose-500/30 px-3 py-1.5 text-xs text-rose-200"
+                            className="rounded-lg border border-rose-500/30 px-3 py-1.5 text-xs text-rose-700 dark:text-rose-200"
                           >
                             Reject
                           </button>
@@ -428,7 +428,7 @@ export function SkillSwapModule() {
                         <button
                           type="button"
                           onClick={() => void handleExchangeAction(ex.id, 'cancel')}
-                          className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-300"
+                          className="rounded-lg border border-hairline-strong px-3 py-1.5 text-xs text-ink-secondary"
                         >
                           Cancel
                         </button>
@@ -438,14 +438,14 @@ export function SkillSwapModule() {
                         <button
                           type="button"
                           onClick={() => void handleExchangeAction(ex.id, 'confirm_complete')}
-                          className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-200"
+                          className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-800 dark:text-emerald-200"
                         >
                           <CheckCircle2 className="w-3.5 h-3.5" /> Confirm Completed
                         </button>
                       )}
 
                       {myConfirmed && ex.status !== 'completed' && (
-                        <span className="text-xs text-amber-300">
+                        <span className="text-xs text-amber-700 dark:text-amber-300">
                           Waiting for {partnerName} to confirm completion ({partnerConfirmed ? '1/1' : '0/1'})
                         </span>
                       )}
@@ -453,9 +453,9 @@ export function SkillSwapModule() {
                       <button
                         type="button"
                         onClick={() => void openExchangeChat(ex)}
-                        className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-white/[0.08] px-3 py-1.5 text-xs font-medium text-white hover:bg-white/15"
+                        className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-tint-hover border border-hairline px-3 py-1.5 text-xs font-medium text-ink hover:opacity-85"
                       >
-                        <MessageSquare className="w-3.5 h-3.5 text-emerald-300" /> Chat & Session
+                        <MessageSquare className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-300" /> Chat & Session
                       </button>
                     </div>
                   </div>
@@ -466,32 +466,32 @@ export function SkillSwapModule() {
 
           {/* LIVE CHAT & SESSION SCHEDULING PANEL */}
           {activeExchange && (
-            <div className="lg:col-span-6 rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 space-y-5 flex flex-col justify-between h-fit">
-              <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+            <div className="lg:col-span-6 rounded-2xl border border-hairline bg-surface p-6 space-y-5 flex flex-col justify-between h-fit">
+              <div className="flex items-center justify-between border-b border-hairline pb-3">
                 <div>
-                  <h3 className="font-display text-base font-bold text-white">
+                  <h3 className="font-display text-base font-bold text-ink">
                     {activeExchange.requesterId === user?.id ? activeExchange.recipientName : activeExchange.requesterName}
                   </h3>
-                  <div className="text-xs text-emerald-300">
+                  <div className="text-xs text-emerald-700 dark:text-emerald-300">
                     {activeExchange.offeredSkill} ↔ {activeExchange.requestedSkill} · {activeExchange.status}
                   </div>
                 </div>
-                <button type="button" onClick={() => setActiveExchange(null)} className="text-slate-400 hover:text-white">
+                <button type="button" onClick={() => setActiveExchange(null)} className="text-ink-muted hover:text-ink">
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
               {['accepted', 'scheduled'].includes(activeExchange.status) && (
-                <div className="rounded-xl border border-white/[0.08] bg-[#070B14] p-4 space-y-2.5">
-                  <div className="text-xs font-semibold text-white inline-flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-cyan-300" /> Schedule Session
+                <div className="rounded-xl border border-hairline bg-inset p-4 space-y-2.5">
+                  <div className="text-xs font-semibold text-ink inline-flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-300" /> Schedule Session
                   </div>
                   <div className="flex flex-col sm:flex-row gap-2">
                     <input
                       type="datetime-local"
                       value={scheduleInput}
                       onChange={(e) => setScheduleInput(e.target.value)}
-                      className="flex-1 rounded-lg border border-white/10 bg-[#0D1424] px-3 py-1.5 text-xs text-white font-mono"
+                      className="flex-1 rounded-lg border border-hairline-strong bg-surface px-3 py-1.5 text-xs text-ink font-mono"
                     />
                     <button
                       type="button"
@@ -507,21 +507,21 @@ export function SkillSwapModule() {
                     value={scheduleNotes}
                     onChange={(e) => setScheduleNotes(e.target.value)}
                     placeholder="Meeting link or agenda note..."
-                    className="w-full rounded-lg border border-white/10 bg-[#0D1424] px-3 py-1.5 text-xs text-white"
+                    className="w-full rounded-lg border border-hairline-strong bg-surface px-3 py-1.5 text-xs text-ink"
                   />
                 </div>
               )}
 
               {activeExchange.status === 'completed' && !activeExchange.feedbackRating && (
-                <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/5 p-4 space-y-2.5">
-                  <div className="text-xs font-semibold text-emerald-200 inline-flex items-center gap-1.5">
+                <div className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 p-4 space-y-2.5">
+                  <div className="text-xs font-semibold text-emerald-800 dark:text-emerald-200 inline-flex items-center gap-1.5">
                     <Star className="w-3.5 h-3.5" /> Leave Exchange Feedback
                   </div>
                   <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <select
                       value={rating}
                       onChange={(e) => setRating(Number(e.target.value))}
-                      className="rounded-lg border border-white/10 bg-[#070B14] px-2.5 py-1.5 text-xs text-white"
+                      className="rounded-lg border border-hairline-strong bg-inset px-2.5 py-1.5 text-xs text-ink"
                     >
                       {[5, 4, 3, 2, 1].map((n) => (
                         <option key={n} value={n}>{n} / 5</option>
@@ -532,7 +532,7 @@ export function SkillSwapModule() {
                       value={feedbackNote}
                       onChange={(e) => setFeedbackNote(e.target.value)}
                       placeholder="How was the exchange?"
-                      className="flex-1 rounded-lg border border-white/10 bg-[#070B14] px-3 py-1.5 text-xs text-white"
+                      className="flex-1 rounded-lg border border-hairline-strong bg-inset px-3 py-1.5 text-xs text-ink"
                     />
                     <button
                       type="button"
@@ -547,7 +547,7 @@ export function SkillSwapModule() {
 
               <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
                 {chatMessages.length === 0 ? (
-                  <p className="text-xs text-slate-400 text-center py-6">
+                  <p className="text-xs text-ink-muted text-center py-6">
                     Start chatting in real time to coordinate your skill exchange.
                   </p>
                 ) : (
@@ -558,11 +558,11 @@ export function SkillSwapModule() {
                         key={msg.id}
                         className={`rounded-xl px-3.5 py-2.5 text-xs max-w-[85%] ${
                           isMine
-                            ? 'ml-auto bg-emerald-500/20 border border-emerald-400/30 text-emerald-50'
-                            : 'mr-auto bg-[#070B14] border border-white/10 text-slate-200'
+                            ? 'ml-auto bg-emerald-500/20 border border-emerald-400/35 text-ink'
+                            : 'mr-auto bg-inset border border-hairline-strong text-ink-secondary'
                         }`}
                       >
-                        <div className="text-[10px] text-slate-400 mb-0.5">
+                        <div className="text-[10px] text-ink-muted mb-0.5">
                           {msg.sender_name} · {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </div>
                         <div>{msg.content}</div>
@@ -578,7 +578,7 @@ export function SkillSwapModule() {
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   placeholder="Write a message..."
-                  className="flex-1 min-w-0 rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-xs text-white"
+                  className="flex-1 min-w-0 rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-xs text-ink"
                 />
                 <button
                   type="submit"
@@ -594,35 +594,35 @@ export function SkillSwapModule() {
 
       {/* MY SKILL PROFILE */}
       {tab === 'profile' && (
-        <form onSubmit={handleSaveProfile} className="max-w-2xl rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 space-y-4">
-          <h2 className="font-display text-lg font-bold text-white">Your SkillSwap Profile</h2>
+        <form onSubmit={handleSaveProfile} className="max-w-2xl rounded-2xl border border-hairline bg-surface p-6 space-y-4">
+          <h2 className="font-display text-lg font-bold text-ink">Your SkillSwap Profile</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
-              <label className="text-xs text-slate-400 block mb-1">Skills you can teach (comma-separated)</label>
+              <label className="text-xs text-ink-muted block mb-1">Skills you can teach (comma-separated)</label>
               <input
                 type="text"
                 value={teachInput}
                 onChange={(e) => setTeachInput(e.target.value)}
                 placeholder="Comma-separated skills you can teach"
-                className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+                className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="text-xs text-slate-400 block mb-1">Skills you want to learn (comma-separated)</label>
+              <label className="text-xs text-ink-muted block mb-1">Skills you want to learn (comma-separated)</label>
               <input
                 type="text"
                 value={learnInput}
                 onChange={(e) => setLearnInput(e.target.value)}
                 placeholder="Comma-separated skills you want to learn"
-                className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+                className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400 block mb-1">Experience</label>
+              <label className="text-xs text-ink-muted block mb-1">Experience</label>
               <select
                 value={experienceLevel}
                 onChange={(e) => setExperienceLevel(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3 py-2.5 text-sm text-white"
+                className="w-full rounded-xl border border-hairline-strong bg-inset px-3 py-2.5 text-sm text-ink"
               >
                 <option>Beginner</option>
                 <option>Intermediate</option>
@@ -631,11 +631,11 @@ export function SkillSwapModule() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-slate-400 block mb-1">Preference</label>
+              <label className="text-xs text-ink-muted block mb-1">Preference</label>
               <select
                 value={mode}
                 onChange={(e) => setMode(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3 py-2.5 text-sm text-white"
+                className="w-full rounded-xl border border-hairline-strong bg-inset px-3 py-2.5 text-sm text-ink"
               >
                 <option>Online & In-Person</option>
                 <option>Online</option>
@@ -643,58 +643,58 @@ export function SkillSwapModule() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-slate-400 block mb-1">Languages</label>
+              <label className="text-xs text-ink-muted block mb-1">Languages</label>
               <input
                 type="text"
                 value={languagesInput}
                 onChange={(e) => setLanguagesInput(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+                className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400 block mb-1">City</label>
+              <label className="text-xs text-ink-muted block mb-1">City</label>
               <input
                 type="text"
                 value={locationCity}
                 onChange={(e) => setLocationCity(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+                className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400 block mb-1">Availability</label>
+              <label className="text-xs text-ink-muted block mb-1">Availability</label>
               <input
                 type="text"
                 value={availability}
                 onChange={(e) => setAvailability(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+                className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400 block mb-1">Portfolio URL (optional)</label>
+              <label className="text-xs text-ink-muted block mb-1">Portfolio URL (optional)</label>
               <input
                 type="url"
                 value={portfolioUrl}
                 onChange={(e) => setPortfolioUrl(e.target.value)}
                 placeholder="https://..."
-                className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+                className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="text-xs text-slate-400 block mb-1">Interests & Bio</label>
+              <label className="text-xs text-ink-muted block mb-1">Interests & Bio</label>
               <textarea
                 rows={3}
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+                className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="text-xs text-slate-400 block mb-1">Interests (comma-separated)</label>
+              <label className="text-xs text-ink-muted block mb-1">Interests (comma-separated)</label>
               <input
                 type="text"
                 value={interestsInput}
                 onChange={(e) => setInterestsInput(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+                className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
               />
             </div>
           </div>
@@ -711,46 +711,46 @@ export function SkillSwapModule() {
 
       {/* PROPOSE EXCHANGE MODAL */}
       {requestTarget && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-          <form onSubmit={handleSendRequest} className="w-full max-w-md rounded-2xl border border-white/12 bg-[#0D1424] p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-center justify-center p-4">
+          <form onSubmit={handleSendRequest} className="w-full max-w-md rounded-2xl border border-hairline-strong bg-surface p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="font-display text-lg font-bold text-white">Exchange with {requestTarget.displayName}</h2>
-              <button type="button" onClick={() => setRequestTarget(null)} className="text-slate-400 hover:text-white">
+              <h2 className="font-display text-lg font-bold text-ink">Exchange with {requestTarget.displayName}</h2>
+              <button type="button" onClick={() => setRequestTarget(null)} className="text-ink-muted hover:text-ink">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div>
-              <label className="text-xs text-slate-400 block mb-1">Skill You Offer</label>
+              <label className="text-xs text-ink-muted block mb-1">Skill You Offer</label>
               <input
                 type="text"
                 required
                 value={offeredSkill}
                 onChange={(e) => setOfferedSkill(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2 text-sm text-white"
+                className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2 text-sm text-ink"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400 block mb-1">Skill You Want to Learn</label>
+              <label className="text-xs text-ink-muted block mb-1">Skill You Want to Learn</label>
               <input
                 type="text"
                 required
                 value={requestedSkill}
                 onChange={(e) => setRequestedSkill(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2 text-sm text-white"
+                className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2 text-sm text-ink"
               />
             </div>
             <div>
-              <label className="text-xs text-slate-400 block mb-1">Introduction Message</label>
+              <label className="text-xs text-ink-muted block mb-1">Introduction Message</label>
               <textarea
                 rows={3}
                 value={requestMsg}
                 onChange={(e) => setRequestMsg(e.target.value)}
                 placeholder="Introduce yourself and suggest a rough schedule..."
-                className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2 text-sm text-white"
+                className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2 text-sm text-ink"
               />
             </div>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setRequestTarget(null)} className="px-4 py-2 text-xs text-slate-300">
+              <button type="button" onClick={() => setRequestTarget(null)} className="px-4 py-2 text-xs text-ink-secondary">
                 Cancel
               </button>
               <button type="submit" className="rounded-xl bg-emerald-400 px-5 py-2 text-xs font-semibold text-slate-950">

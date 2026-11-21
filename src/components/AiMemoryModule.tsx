@@ -111,8 +111,8 @@ export function AiMemoryModule() {
     <div className="space-y-5 sm:space-y-6 max-w-5xl mx-auto min-w-0 w-full">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 min-w-0">
         <div className="min-w-0">
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-white">AI Life Memory</h1>
-          <p className="text-sm text-slate-400">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-ink">AI Life Memory</h1>
+          <p className="text-sm text-ink-muted">
             Ask questions about your real memories, dreams, objects, and unlocked capsules.
           </p>
         </div>
@@ -121,16 +121,16 @@ export function AiMemoryModule() {
           <button
             type="button"
             onClick={() => navigateTo('profile')}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#0D1424] px-3.5 py-2 text-xs text-slate-300 hover:text-white whitespace-nowrap shrink-0"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-hairline-strong bg-surface px-3.5 py-2 text-xs text-ink-secondary hover:text-ink whitespace-nowrap shrink-0"
           >
-            <ShieldCheck className="w-3.5 h-3.5 text-cyan-300" />
+            <ShieldCheck className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-300" />
             AI Access: {user?.aiConsent ? 'Enabled' : 'Paused'}
           </button>
           {messages.length > 0 && (
             <button
               type="button"
               onClick={clearHistory}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-[#0D1424] px-3.5 py-2 text-xs text-slate-300 hover:text-rose-200 whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-hairline-strong bg-surface px-3.5 py-2 text-xs text-ink-secondary hover:text-rose-600 dark:hover:text-rose-200 whitespace-nowrap shrink-0"
             >
               <Trash2 className="w-3.5 h-3.5" /> Clear History
             </button>
@@ -139,7 +139,7 @@ export function AiMemoryModule() {
       </div>
 
       {!user?.aiConsent && (
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 sm:p-5 text-sm text-amber-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 sm:p-5 text-sm text-amber-800 dark:text-amber-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <span>ECHO AI memory access is turned off in your privacy settings.</span>
           <button
             type="button"
@@ -159,7 +159,7 @@ export function AiMemoryModule() {
             type="button"
             onClick={() => void askQuestion(q)}
             disabled={sending || !user?.aiConsent}
-            className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 px-3 py-1.5 text-xs text-cyan-200 hover:bg-cyan-500/15 disabled:opacity-40 transition-colors whitespace-nowrap shrink-0 sm:whitespace-normal"
+            className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-800 dark:text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-40 transition-colors whitespace-nowrap shrink-0 sm:whitespace-normal"
           >
             {q}
           </button>
@@ -167,15 +167,15 @@ export function AiMemoryModule() {
       </div>
 
       {/* Conversation Transcript */}
-      <div className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-5 sm:p-6 space-y-5 min-h-[380px] flex flex-col justify-between">
+      <div className="rounded-2xl border border-hairline bg-surface p-5 sm:p-6 space-y-5 min-h-[380px] flex flex-col justify-between">
         <div className="space-y-4 overflow-y-auto max-h-[540px] pr-1">
           {loadingHistory ? (
-            <div className="h-24 rounded-xl bg-white/[0.04] animate-pulse" />
+            <div className="h-24 rounded-xl bg-tint animate-pulse" />
           ) : messages.length === 0 ? (
             <div className="py-12 text-center space-y-3">
-              <Sparkles className="w-7 h-7 text-cyan-300 mx-auto" />
-              <h2 className="font-display text-lg font-semibold text-white">Grounded in your real life archive</h2>
-              <p className="text-sm text-slate-400 max-w-lg mx-auto">
+              <Sparkles className="w-7 h-7 text-cyan-600 dark:text-cyan-300 mx-auto" />
+              <h2 className="font-display text-lg font-semibold text-ink">Grounded in your real life archive</h2>
+              <p className="text-sm text-ink-muted max-w-lg mx-auto">
                 ECHO AI reads only entries you haven’t excluded, separates stored facts from gentle reflection, and never fabricates memories that aren’t in your database.
               </p>
             </div>
@@ -185,33 +185,33 @@ export function AiMemoryModule() {
                 key={m.id}
                 className={`rounded-2xl p-4 sm:p-5 space-y-3 ${
                   m.role === 'user'
-                    ? 'bg-[#121D34] border border-sky-400/20 ml-auto max-w-2xl'
-                    : 'bg-[#070B14] border border-white/[0.08] mr-auto max-w-3xl'
+                    ? 'bg-surface-raised border border-sky-400/25 ml-auto max-w-2xl'
+                    : 'bg-inset border border-hairline mr-auto max-w-3xl'
                 }`}
               >
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span className={m.role === 'assistant' ? 'text-cyan-300 font-medium' : 'text-sky-300 font-medium'}>
+                <div className="flex items-center justify-between text-xs text-ink-muted">
+                  <span className={m.role === 'assistant' ? 'text-cyan-700 dark:text-cyan-300 font-medium' : 'text-sky-700 dark:text-sky-300 font-medium'}>
                     {m.role === 'assistant' ? 'ECHO AI' : user?.displayName}
                   </span>
                   <span className="font-mono tabular-nums">
                     {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
-                <div className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{m.content}</div>
+                <div className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap">{m.content}</div>
 
                 {m.sources && m.sources.length > 0 && (
-                  <div className="pt-2 border-t border-white/[0.06] space-y-1.5">
-                    <div className="text-xs text-slate-400">Referenced entries from your archive:</div>
+                  <div className="pt-2 border-t border-hairline space-y-1.5">
+                    <div className="text-xs text-ink-muted">Referenced entries from your archive:</div>
                     <div className="flex flex-wrap gap-2">
                       {m.sources.map((src) => (
                         <button
                           key={src.id}
                           type="button"
                           onClick={() => navigateTo(sourceKindToModule(src.kind), src.id)}
-                          className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.04] px-2.5 py-1 text-xs text-cyan-200 hover:bg-white/[0.08]"
+                          className="inline-flex items-center gap-1 rounded-lg border border-hairline-strong bg-tint px-2.5 py-1 text-xs text-cyan-700 dark:text-cyan-200 hover:bg-tint-hover"
                         >
                           <span>{src.title}</span>
-                          {src.date && <span className="text-slate-400 font-mono">({src.date.slice(0, 10)})</span>}
+                          {src.date && <span className="text-ink-muted font-mono">({src.date.slice(0, 10)})</span>}
                           <ArrowUpRight className="w-3 h-3" />
                         </button>
                       ))}
@@ -223,20 +223,20 @@ export function AiMemoryModule() {
           )}
 
           {sending && (
-            <div className="rounded-2xl bg-[#070B14] border border-cyan-500/20 p-4 text-xs text-cyan-200">
+            <div className="rounded-2xl bg-inset border border-cyan-500/25 p-4 text-xs text-cyan-800 dark:text-cyan-200">
               Searching your archive and preparing grounded reflection...
             </div>
           )}
         </div>
 
         {followUps.length > 0 && (
-          <div className="flex flex-wrap gap-2 pt-2 border-t border-white/[0.06]">
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-hairline">
             {followUps.map((fq) => (
               <button
                 key={fq}
                 type="button"
                 onClick={() => void askQuestion(fq)}
-                className="text-xs text-slate-300 hover:text-cyan-200 underline underline-offset-4"
+                className="text-xs text-ink-secondary hover:text-cyan-700 dark:hover:text-cyan-200 underline underline-offset-4"
               >
                 {fq}
               </button>
@@ -245,7 +245,7 @@ export function AiMemoryModule() {
         )}
 
         {error && (
-          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-200">
+          <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-700 dark:text-rose-200">
             {error}
           </div>
         )}
@@ -263,7 +263,7 @@ export function AiMemoryModule() {
             onChange={(e) => setInput(e.target.value)}
             disabled={sending || !user?.aiConsent}
             placeholder="Ask about a memory, person, place, emotion, or year..."
-            className="flex-1 min-w-0 rounded-xl border border-white/10 bg-[#070B14] px-4 py-3 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-cyan-400"
+            className="flex-1 min-w-0 rounded-xl border border-hairline-strong bg-inset px-4 py-3 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-cyan-400"
           />
           <button
             type="submit"

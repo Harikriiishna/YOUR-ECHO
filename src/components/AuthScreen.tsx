@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, KeyRound, Lock, Mail, Sparkles, User as UserIcon } from 'lucide-react';
+import { ArrowRight, KeyRound, Lock, Mail, Palette, Sparkles, User as UserIcon } from 'lucide-react';
 import { useEcho } from '../context/EchoContext';
 import { apiRequest } from '../lib/api';
+import { ECHO_THEMES } from '../lib/themes';
 import type { AuthUser, EchoObject } from '../types/echo';
 import { SafeImage } from './MediaElements';
 
 export function AuthScreen() {
-  const { loginSuccess } = useEcho();
+  const { loginSuccess, theme, setTheme } = useEcho();
   const [mode, setMode] = useState<'login' | 'register' | 'reset'>('register');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -31,6 +32,14 @@ export function AuthScreen() {
     }
   }, []);
 
+  const cycleTheme = () => {
+    const idx = ECHO_THEMES.findIndex((t) => t.id === theme);
+    const next = ECHO_THEMES[(idx + 1) % ECHO_THEMES.length];
+    void setTheme(next.id);
+  };
+
+  const currentThemeDef = ECHO_THEMES.find((t) => t.id === theme) || ECHO_THEMES[0];
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -42,7 +51,7 @@ export function AuthScreen() {
       if (mode === 'register') {
         const res = await apiRequest<{ user: AuthUser; token: string }>('/auth/register', {
           method: 'POST',
-          body: JSON.stringify({ email, password, displayName, timezone: tz }),
+          body: JSON.stringify({ email, password, displayName, timezone: tz, theme }),
         });
         loginSuccess(res.user, res.token);
       } else if (mode === 'login') {
@@ -82,36 +91,36 @@ export function AuthScreen() {
 
   if (sharedObjectSlug) {
     return (
-      <div className="min-h-screen bg-[#070B14] text-slate-100 flex items-center justify-center p-6">
-        <div className="max-w-2xl w-full rounded-2xl border border-white/10 bg-[#0D1424] p-8 space-y-5">
+      <div className="min-h-screen bg-transparent text-ink flex items-center justify-center p-6">
+        <div className="max-w-2xl w-full rounded-2xl border border-hairline-strong bg-surface p-8 space-y-5">
           <div className="flex items-center justify-between">
-            <span className="font-display text-lg font-bold tracking-tight text-sky-300">ECHO</span>
+            <span className="font-display text-lg font-bold tracking-tight text-sky-700 dark:text-sky-300">ECHO</span>
             <button
               type="button"
               onClick={() => {
                 window.history.replaceState({}, '', '/');
                 setSharedObjectSlug(null);
               }}
-              className="text-xs font-medium text-slate-300 hover:text-white underline underline-offset-4"
+              className="text-xs font-medium text-ink-secondary hover:text-ink underline underline-offset-4"
             >
               Open ECHO App
             </button>
           </div>
           {sharedObject ? (
             <>
-              <div className="text-xs text-amber-300/90">
+              <div className="text-xs text-amber-700 dark:text-amber-300/90">
                 {sharedObject.category} · {sharedObject.acquisitionDate || 'Undated heirloom'} · {sharedObject.location || 'Shared story'}
               </div>
-              <h1 className="font-display text-3xl font-bold text-white">{sharedObject.name}</h1>
-              {sharedObject.description && <p className="text-sm text-slate-300">{sharedObject.description}</p>}
-              <p className="text-base leading-relaxed text-slate-200 whitespace-pre-wrap">{sharedObject.story}</p>
-              <div className="pt-4 border-t border-white/10 text-xs text-slate-400">
+              <h1 className="font-display text-3xl font-bold text-ink">{sharedObject.name}</h1>
+              {sharedObject.description && <p className="text-sm text-ink-secondary">{sharedObject.description}</p>}
+              <p className="text-base leading-relaxed text-ink-secondary whitespace-pre-wrap">{sharedObject.story}</p>
+              <div className="pt-4 border-t border-hairline text-xs text-ink-muted">
                 Current Steward: {sharedObject.currentOwner || 'Private'}
                 {sharedObject.previousOwners.length > 0 && ` · Previous Owners: ${sharedObject.previousOwners.join(' -> ')}`}
               </div>
             </>
           ) : (
-            <p className="text-sm text-slate-400">This shared object story is either private or no longer available.</p>
+            <p className="text-sm text-ink-muted">This shared object story is either private or no longer available.</p>
           )}
         </div>
       </div>
@@ -119,7 +128,7 @@ export function AuthScreen() {
   }
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-clip bg-[#070B14] text-slate-100 grid lg:grid-cols-12">
+    <div className="min-h-screen w-full max-w-full overflow-x-clip bg-transparent text-ink grid lg:grid-cols-12">
       <div className="relative lg:col-span-7 flex flex-col justify-between overflow-hidden min-h-[230px] sm:min-h-[280px] lg:min-h-screen">
         <SafeImage
           src="/src/assets/images/echo_hero_cosmos_1795260972427.jpg"
@@ -152,22 +161,34 @@ export function AuthScreen() {
         </div>
       </div>
 
-      <div className="lg:col-span-5 flex items-center justify-center p-5 sm:p-12 bg-[#090F1D] border-t lg:border-t-0 lg:border-l border-white/[0.07]">
+      <div className="lg:col-span-5 flex items-center justify-center p-5 sm:p-12 bg-shell border-t lg:border-t-0 lg:border-l border-hairline">
         <div className="w-full max-w-md space-y-6 sm:space-y-7 min-w-0">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-medium text-ink-muted">Theme: {currentThemeDef.name}</span>
+            <button
+              type="button"
+              onClick={cycleTheme}
+              className="touch-manipulation inline-flex items-center gap-1.5 rounded-xl border border-hairline bg-surface px-3 py-1.5 text-xs font-medium text-ink-secondary hover:text-ink hover:border-hairline-strong transition-colors min-h-[36px]"
+            >
+              <Palette className="w-3.5 h-3.5 text-sky-600 dark:text-sky-300" />
+              Switch Theme
+            </button>
+          </div>
+
           <div className="space-y-2">
-            <h2 className="font-display text-2xl font-bold text-white">
+            <h2 className="font-display text-2xl font-bold text-ink">
               {mode === 'register' && 'Create your ECHO archive'}
               {mode === 'login' && 'Welcome back to ECHO'}
               {mode === 'reset' && 'Reset your password'}
             </h2>
-            <p className="text-sm text-slate-400">
+            <p className="text-sm text-ink-muted">
               {mode === 'register' && 'Your memories, capsules, and dreams stay private and synchronized.'}
               {mode === 'login' && 'Sign in to access your memories, capsules, and live SkillSwap conversations.'}
               {mode === 'reset' && 'Generate a one-time reset token to regain access to your account.'}
             </p>
           </div>
 
-          <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-[#0D1424] border border-white/[0.08]">
+          <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-surface border border-hairline">
             <button
               type="button"
               onClick={() => {
@@ -175,7 +196,7 @@ export function AuthScreen() {
                 setError(null);
               }}
               className={`py-2 px-1 text-[11px] sm:text-xs font-medium rounded-lg transition-colors truncate ${
-                mode === 'register' ? 'bg-sky-500 text-slate-950 font-semibold' : 'text-slate-400 hover:text-white'
+                mode === 'register' ? 'bg-sky-500 text-slate-950 font-semibold' : 'text-ink-muted hover:text-ink'
               }`}
             >
               Create Account
@@ -187,7 +208,7 @@ export function AuthScreen() {
                 setError(null);
               }}
               className={`py-2 px-1 text-[11px] sm:text-xs font-medium rounded-lg transition-colors truncate ${
-                mode === 'login' ? 'bg-sky-500 text-slate-950 font-semibold' : 'text-slate-400 hover:text-white'
+                mode === 'login' ? 'bg-sky-500 text-slate-950 font-semibold' : 'text-ink-muted hover:text-ink'
               }`}
             >
               Sign In
@@ -199,7 +220,7 @@ export function AuthScreen() {
                 setError(null);
               }}
               className={`py-2 px-1 text-[11px] sm:text-xs font-medium rounded-lg transition-colors truncate ${
-                mode === 'reset' ? 'bg-sky-500 text-slate-950 font-semibold' : 'text-slate-400 hover:text-white'
+                mode === 'reset' ? 'bg-sky-500 text-slate-950 font-semibold' : 'text-ink-muted hover:text-ink'
               }`}
             >
               Reset
@@ -209,56 +230,56 @@ export function AuthScreen() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'register' && (
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">Display Name</label>
+                <label className="text-xs font-medium text-ink-secondary">Display Name</label>
                 <div className="relative">
-                  <UserIcon className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <UserIcon className="w-4 h-4 text-ink-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     required
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Your name"
-                    className="w-full rounded-xl border border-white/10 bg-[#0D1424] pl-10 pr-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
+                    className="w-full rounded-xl border border-hairline-strong bg-inset pl-10 pr-4 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-sky-400"
                   />
                 </div>
               </div>
             )}
 
             <div className="space-y-1.5">
-              <label className="text-xs font-medium text-slate-300">Email Address</label>
+              <label className="text-xs font-medium text-ink-secondary">Email Address</label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Mail className="w-4 h-4 text-ink-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Enter your email address"
-                  className="w-full rounded-xl border border-white/10 bg-[#0D1424] pl-10 pr-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
+                  className="w-full rounded-xl border border-hairline-strong bg-inset pl-10 pr-4 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-sky-400"
                 />
               </div>
             </div>
 
             {mode === 'reset' && issuedResetCode && (
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-amber-300">Reset Token (auto-filled)</label>
+                <label className="text-xs font-medium text-amber-700 dark:text-amber-300">Reset Token (auto-filled)</label>
                 <input
                   type="text"
                   required
                   value={resetToken}
                   onChange={(e) => setResetToken(e.target.value)}
-                  className="w-full rounded-xl border border-amber-500/30 bg-[#0D1424] px-3.5 py-2.5 text-xs font-mono text-amber-200 focus:outline-none"
+                  className="w-full rounded-xl border border-amber-500/30 bg-inset px-3.5 py-2.5 text-xs font-mono text-amber-800 dark:text-amber-200 focus:outline-none"
                 />
               </div>
             )}
 
             {(mode !== 'reset' || Boolean(issuedResetCode)) && (
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">
+                <label className="text-xs font-medium text-ink-secondary">
                   {mode === 'reset' ? 'New Password (8+ characters)' : 'Password'}
                 </label>
                 <div className="relative">
-                  <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <Lock className="w-4 h-4 text-ink-muted absolute left-3.5 top-1/2 -translate-y-1/2" />
                   <input
                     type="password"
                     required
@@ -266,20 +287,20 @@ export function AuthScreen() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="At least 8 characters"
-                    className="w-full rounded-xl border border-white/10 bg-[#0D1424] pl-10 pr-4 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-sky-400"
+                    className="w-full rounded-xl border border-hairline-strong bg-inset pl-10 pr-4 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-sky-400"
                   />
                 </div>
               </div>
             )}
 
             {error && (
-              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-200">
+              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-2.5 text-xs text-rose-700 dark:text-rose-200">
                 {error}
               </div>
             )}
 
             {notice && (
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-200">
+              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2.5 text-xs text-emerald-700 dark:text-emerald-200">
                 {notice}
               </div>
             )}

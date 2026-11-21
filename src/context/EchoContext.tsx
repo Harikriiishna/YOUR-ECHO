@@ -7,11 +7,19 @@ import {
   removeOfflineMutation,
   setAuthToken,
 } from '../lib/api';
+import {
+  applyThemeToDocument,
+  type EchoThemeId,
+  getSavedThemeId,
+  normalizeThemeId,
+} from '../lib/themes';
 import type { AuthUser, ModuleId, NotificationItem, PendingOfflineMutation } from '../types/echo';
 
 interface EchoContextValue {
   user: AuthUser | null;
   authLoading: boolean;
+  theme: EchoThemeId;
+  setTheme: (nextTheme: EchoThemeId) => Promise<void>;
   activeModule: ModuleId;
   setActiveModule: (mod: ModuleId) => void;
   focusItemId: string | null;
@@ -41,6 +49,7 @@ const EchoContext = createContext<EchoContextValue | null>(null);
 export function EchoProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [theme, setThemeState] = useState<EchoThemeId>(() => getSavedThemeId());
   const [activeModule, setActiveModule] = useState<ModuleId>('home');
   const [focusItemId, setFocusItemId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -52,6 +61,33 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
+  const syncThemeFromUser = useCallback((authUser: AuthUser | null) => {
+    if (authUser?.theme) {
+      const resolved = normalizeThemeId(authUser.theme);
+      setThemeState(resolved);
+      applyThemeToDocument(resolved);
+    }
+  }, []);
+
+  const setTheme = useCallback(
+    async (nextTheme: EchoThemeId) => {
+      const resolved = normalizeThemeId(nextTheme);
+      setThemeState(resolved);
+      applyThemeToDocument(resolved);
+      if (!user) return;
+      try {
+        const res = await apiRequest<{ user: AuthUser }>('/profile', {
+          method: 'PUT',
+          body: JSON.stringify({ theme: resolved }),
+        });
+        setUser(res.user);
+      } catch {
+        // Local theme already applied; ignore transient offline save failure
+      }
+    },
+    [user]
+  );
+
   const navigateTo = useCallback((mod: ModuleId, itemId: string | null = null) => {
     setActiveModule(mod);
     setFocusItemId(itemId);
@@ -61,10 +97,11 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
     try {
       const data = await apiRequest<{ user: AuthUser }>('/auth/me');
       setUser(data.user);
+      syncThemeFromUser(data.user);
     } catch {
       setUser(null);
     }
-  }, []);
+  }, [syncThemeFromUser]);
 
   const refreshNotifications = useCallback(async () => {
     try {
@@ -126,7 +163,10 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const data = await apiRequest<{ user: AuthUser }>('/auth/me');
-        if (active) setUser(data.user);
+        if (active) {
+          setUser(data.user);
+          syncThemeFromUser(data.user);
+        }
       } catch {
         if (active) setUser(null);
       } finally {
@@ -138,7 +178,7 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [syncThemeFromUser]);
 
   // Online / Offline listeners + automatic sync retry
   useEffect(() => {
@@ -212,10 +252,14 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
     };
   }, [user, refreshNotifications]);
 
-  const loginSuccess = useCallback((nextUser: AuthUser, token: string) => {
-    setAuthToken(token);
-    setUser(nextUser);
-  }, []);
+  const loginSuccess = useCallback(
+    (nextUser: AuthUser, token: string) => {
+      setAuthToken(token);
+      setUser(nextUser);
+      syncThemeFromUser(nextUser);
+    },
+    [syncThemeFromUser]
+  );
 
   const logout = useCallback(async () => {
     try {
@@ -236,6 +280,8 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
       value={{
         user,
         authLoading,
+        theme,
+        setTheme,
         activeModule,
         setActiveModule,
         focusItemId,

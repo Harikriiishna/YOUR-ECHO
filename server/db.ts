@@ -30,6 +30,7 @@ export function initDatabase(): void {
       avatar_media_id TEXT,
       location_hint TEXT NOT NULL DEFAULT '',
       timezone TEXT NOT NULL DEFAULT 'UTC',
+      theme TEXT NOT NULL DEFAULT 'midnight',
       email_verified INTEGER NOT NULL DEFAULT 1,
       ai_consent INTEGER NOT NULL DEFAULT 1,
       notification_prefs_json TEXT NOT NULL DEFAULT '{"memoryReminders":true,"onThisDay":true,"capsuleUnlocks":true,"wisdomReplies":true,"humanityReactions":true,"skillMatches":true,"sessionReminders":true}',
@@ -318,6 +319,11 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_objects_user ON objects(user_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
   `);
+
+  const userCols = db.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>;
+  if (!userCols.some((c) => c.name === 'theme')) {
+    db.exec("ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'midnight'");
+  }
 }
 
 export function newId(prefix = ''): string {

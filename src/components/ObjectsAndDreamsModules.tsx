@@ -201,7 +201,7 @@ export function LifeBehindObjectsModule() {
 
   return (
     <div className="space-y-6 min-w-0 w-full">
-      <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0D1424] w-full">
+      <div className="relative overflow-hidden rounded-2xl border border-hairline bg-[#0D1424] w-full">
         <SafeImage
           src="/src/assets/images/echo_heirloom_watch_1795260972446.jpg"
           alt="Antique brass pocket watch beside a worn leather notebook"
@@ -245,7 +245,7 @@ export function LifeBehindObjectsModule() {
               className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 ${
                 categoryFilter === cat
                   ? 'bg-rose-400 text-slate-950 font-semibold'
-                  : 'bg-[#0D1424] border border-white/[0.08] text-slate-300'
+                  : 'bg-surface border border-hairline text-ink-secondary hover:text-ink'
               }`}
             >
               {cat}
@@ -254,25 +254,25 @@ export function LifeBehindObjectsModule() {
         </div>
 
         <div className="relative w-full sm:w-56 min-w-0 shrink-0">
-          <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && void loadObjects()}
             placeholder="Search objects..."
-            className="w-full rounded-xl border border-white/10 bg-[#0D1424] pl-8 pr-3 py-2 text-xs text-white"
+            className="w-full rounded-xl border border-hairline-strong bg-surface pl-8 pr-3 py-2 text-xs text-ink"
           />
         </div>
       </div>
 
       {loading ? (
-        <div className="h-44 rounded-2xl bg-white/[0.04] animate-pulse" />
+        <div className="h-44 rounded-2xl bg-tint animate-pulse" />
       ) : objects.length === 0 ? (
-        <div className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-10 text-center space-y-3">
-          <Watch className="w-8 h-8 text-rose-300 mx-auto" />
-          <h2 className="font-display text-lg font-semibold text-white">No object stories archived yet</h2>
-          <p className="text-sm text-slate-400 max-w-md mx-auto">
+        <div className="rounded-2xl border border-hairline bg-surface p-10 text-center space-y-3">
+          <Watch className="w-8 h-8 text-rose-600 dark:text-rose-300 mx-auto" />
+          <h2 className="font-display text-lg font-semibold text-ink">No object stories archived yet</h2>
+          <p className="text-sm text-ink-muted max-w-md mx-auto">
             Document a family watch, childhood toy, handwritten letter, or musical instrument and link it to your ECHO memories.
           </p>
         </div>
@@ -285,20 +285,20 @@ export function LifeBehindObjectsModule() {
                 onClick={() => setSelected(obj)}
                 className={`touch-manipulation cursor-pointer rounded-2xl border p-5 space-y-3 transition-colors ${
                   selected?.id === obj.id
-                    ? 'border-rose-400/50 bg-[#141526]'
-                    : 'border-white/[0.08] bg-[#0D1424] hover:border-white/20'
+                    ? 'border-rose-400/50 bg-surface-raised'
+                    : 'border-hairline bg-surface hover:border-hairline-strong'
                 }`}
               >
-                <div className="flex items-center justify-between text-xs text-slate-400">
+                <div className="flex items-center justify-between text-xs text-ink-muted">
                   <span>{obj.category} · {obj.acquisitionDate || 'Undated'}</span>
-                  <span className="inline-flex items-center gap-1 text-slate-300">
-                    {obj.isPublic ? <Globe className="w-3.5 h-3.5 text-teal-300" /> : <Lock className="w-3.5 h-3.5" />}
+                  <span className="inline-flex items-center gap-1 text-ink-secondary">
+                    {obj.isPublic ? <Globe className="w-3.5 h-3.5 text-teal-600 dark:text-teal-300" /> : <Lock className="w-3.5 h-3.5" />}
                     {obj.isPublic ? 'Public' : 'Private'}
                   </span>
                 </div>
-                <h3 className="font-display text-lg font-bold text-white">{obj.name}</h3>
-                <p className="text-sm text-slate-300 line-clamp-3">{obj.story}</p>
-                <div className="text-xs text-slate-400">
+                <h3 className="font-display text-lg font-bold text-ink">{obj.name}</h3>
+                <p className="text-sm text-ink-secondary line-clamp-3">{obj.story}</p>
+                <div className="text-xs text-ink-muted">
                   Steward: {obj.currentOwner || 'You'}
                   {obj.previousOwners.length > 0 && ` · ${obj.previousOwners.length} previous owner(s)`}
                 </div>
@@ -307,15 +307,15 @@ export function LifeBehindObjectsModule() {
           </div>
 
           {selected && (
-            <aside className="lg:col-span-5 rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 space-y-5 h-fit">
+            <aside className="lg:col-span-5 rounded-2xl border border-hairline bg-surface p-6 space-y-5 h-fit">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="text-xs text-rose-300">
+                  <div className="text-xs text-rose-700 dark:text-rose-300">
                     {selected.category} · {selected.acquisitionDate || 'Undated'}
                   </div>
-                  <h2 className="font-display text-2xl font-bold text-white mt-1">{selected.name}</h2>
+                  <h2 className="font-display text-2xl font-bold text-ink mt-1">{selected.name}</h2>
                 </div>
-                <button type="button" onClick={() => setSelected(null)} className="text-slate-400 hover:text-white">
+                <button type="button" onClick={() => setSelected(null)} className="text-ink-muted hover:text-ink">
                   <X className="w-4 h-4" />
                 </button>
               </div>
@@ -323,31 +323,31 @@ export function LifeBehindObjectsModule() {
               {selected.photoMediaId && <AuthMedia mediaId={selected.photoMediaId} className="max-h-60" />}
               {selected.voiceMediaId && <AuthMedia mediaId={selected.voiceMediaId} mimeTypeHint="audio/webm" />}
 
-              {selected.description && <p className="text-xs text-slate-400">{selected.description}</p>}
-              <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{selected.story}</p>
+              {selected.description && <p className="text-xs text-ink-muted">{selected.description}</p>}
+              <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap">{selected.story}</p>
 
               {/* Ownership Provenance Timeline */}
-              <div className="rounded-xl border border-white/[0.08] bg-[#070B14] p-4 space-y-2">
-                <div className="text-xs font-semibold text-rose-300">Ownership History</div>
-                <div className="text-xs text-slate-300 space-y-1">
+              <div className="rounded-xl border border-hairline bg-inset p-4 space-y-2">
+                <div className="text-xs font-semibold text-rose-700 dark:text-rose-300">Ownership History</div>
+                <div className="text-xs text-ink-secondary space-y-1">
                   {selected.previousOwners.map((owner, idx) => (
                     <div key={`${owner}-${idx}`}>Past owner #{idx + 1}: {owner}</div>
                   ))}
-                  <div className="font-semibold text-white">Current steward: {selected.currentOwner}</div>
+                  <div className="font-semibold text-ink">Current steward: {selected.currentOwner}</div>
                 </div>
               </div>
 
               {selected.historicalNotes && (
-                <div className="text-xs text-slate-400">
-                  <span className="text-slate-300 font-medium">Historical Notes: </span>
+                <div className="text-xs text-ink-muted">
+                  <span className="text-ink-secondary font-medium">Historical Notes: </span>
                   {selected.historicalNotes}
                 </div>
               )}
 
               {selected.relatedMemoryIds.length > 0 && (
-                <div className="space-y-1.5 border-t border-white/[0.08] pt-3">
-                  <div className="text-xs font-semibold text-slate-300 inline-flex items-center gap-1.5">
-                    <Link2 className="w-3.5 h-3.5 text-sky-400" /> Linked ECHO Memories
+                <div className="space-y-1.5 border-t border-hairline pt-3">
+                  <div className="text-xs font-semibold text-ink-secondary inline-flex items-center gap-1.5">
+                    <Link2 className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400" /> Linked ECHO Memories
                   </div>
                   {selected.relatedMemoryIds.map((mid) => {
                     const m = memories.find((x) => x.id === mid);
@@ -357,7 +357,7 @@ export function LifeBehindObjectsModule() {
                         key={mid}
                         type="button"
                         onClick={() => navigateTo('memories', m.id)}
-                        className="w-full text-left rounded-lg border border-white/[0.06] bg-[#070B14] px-3 py-2 text-xs text-sky-200 hover:border-sky-400/40"
+                        className="w-full text-left rounded-lg border border-hairline bg-inset px-3 py-2 text-xs text-sky-700 dark:text-sky-200 hover:border-sky-400/50"
                       >
                         {m.title} ({m.memoryDate})
                       </button>
@@ -366,25 +366,25 @@ export function LifeBehindObjectsModule() {
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/[0.08]">
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-hairline">
                 <button
                   type="button"
                   onClick={() => void handleOpenQr(selected)}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2 text-xs text-white hover:bg-white/[0.08]"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-hairline-strong bg-tint px-3 py-2 text-xs text-ink hover:bg-tint-hover"
                 >
-                  <QrCode className="w-3.5 h-3.5 text-rose-300" /> QR Share
+                  <QrCode className="w-3.5 h-3.5 text-rose-600 dark:text-rose-300" /> QR Share
                 </button>
                 <button
                   type="button"
                   onClick={() => openEdit(selected)}
-                  className="inline-flex items-center gap-1.5 rounded-xl border border-white/12 bg-white/[0.04] px-3 py-2 text-xs text-white hover:bg-white/[0.08]"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-hairline-strong bg-tint px-3 py-2 text-xs text-ink hover:bg-tint-hover"
                 >
                   <Edit3 className="w-3.5 h-3.5" /> Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => void handleDelete(selected.id)}
-                  className="ml-auto inline-flex items-center gap-1 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-200"
+                  className="ml-auto inline-flex items-center gap-1 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-xs text-rose-700 dark:text-rose-200"
                 >
                   <Trash2 className="w-3.5 h-3.5" /> Delete
                 </button>
@@ -396,21 +396,21 @@ export function LifeBehindObjectsModule() {
 
       {/* QR SHARE MODAL */}
       {qrModal && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-2xl border border-white/12 bg-[#0D1424] p-6 text-center space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-2xl border border-hairline-strong bg-surface p-6 text-center space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-display text-base font-bold text-white">Object QR Tag</h3>
-              <button type="button" onClick={() => setQrModal(null)} className="text-slate-400 hover:text-white">
+              <h3 className="font-display text-base font-bold text-ink">Object QR Tag</h3>
+              <button type="button" onClick={() => setQrModal(null)} className="text-ink-muted hover:text-ink">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <img src={qrModal.qrDataUrl} alt="Object QR Code" className="w-52 h-52 mx-auto rounded-xl bg-white p-2" />
-            <p className="text-xs text-slate-300">
+            <p className="text-xs text-ink-secondary">
               {qrModal.isPublic
                 ? 'Anyone scanning this QR code can read this object story.'
                 : 'This object is currently Private. Enable Public Sharing in Edit to allow external QR scans.'}
             </p>
-            <div className="text-[11px] font-mono text-slate-400 break-all bg-[#070B14] rounded-lg p-2">
+            <div className="text-[11px] font-mono text-ink-muted break-all bg-inset border border-hairline rounded-lg p-2">
               {qrModal.shareUrl}
             </div>
           </div>
@@ -419,13 +419,13 @@ export function LifeBehindObjectsModule() {
 
       {/* EDITOR MODAL */}
       {editorOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <form onSubmit={handleSave} className="w-full max-w-2xl rounded-2xl border border-white/12 bg-[#0D1424] p-4 sm:p-6 space-y-4 my-4 sm:my-8">
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <form onSubmit={handleSave} className="w-full max-w-2xl rounded-2xl border border-hairline-strong bg-surface p-4 sm:p-6 space-y-4 my-4 sm:my-8">
             <div className="flex items-center justify-between">
-              <h2 className="font-display text-xl font-bold text-white">
+              <h2 className="font-display text-xl font-bold text-ink">
                 {editingId ? 'Edit Object Story' : 'Preserve Meaningful Object'}
               </h2>
-              <button type="button" onClick={() => setEditorOpen(false)} className="text-slate-400 hover:text-white">
+              <button type="button" onClick={() => setEditorOpen(false)} className="text-ink-muted hover:text-ink">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -437,12 +437,12 @@ export function LifeBehindObjectsModule() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Object name"
-                className="rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+                className="rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
               />
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+                className="rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
               >
                 {OBJECT_CATEGORIES.map((c) => (
                   <option key={c} value={c}>{c}</option>
@@ -454,7 +454,7 @@ export function LifeBehindObjectsModule() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Short physical description"
-                className="sm:col-span-2 rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+                className="sm:col-span-2 rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
               />
 
               <textarea
@@ -463,7 +463,7 @@ export function LifeBehindObjectsModule() {
                 value={story}
                 onChange={(e) => setStory(e.target.value)}
                 placeholder="Tell the full story behind this object..."
-                className="sm:col-span-2 rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+                className="sm:col-span-2 rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
               />
 
               <input
@@ -471,14 +471,14 @@ export function LifeBehindObjectsModule() {
                 value={acquisitionDate}
                 onChange={(e) => setAcquisitionDate(e.target.value)}
                 placeholder="Acquisition date or era"
-                className="rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2 text-sm text-white"
+                className="rounded-xl border border-hairline-strong bg-inset px-3.5 py-2 text-sm text-ink"
               />
               <input
                 type="text"
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="Origin or current location"
-                className="rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2 text-sm text-white"
+                className="rounded-xl border border-hairline-strong bg-inset px-3.5 py-2 text-sm text-ink"
               />
 
               <input
@@ -486,14 +486,14 @@ export function LifeBehindObjectsModule() {
                 value={currentOwner}
                 onChange={(e) => setCurrentOwner(e.target.value)}
                 placeholder="Current owner"
-                className="rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2 text-sm text-white"
+                className="rounded-xl border border-hairline-strong bg-inset px-3.5 py-2 text-sm text-ink"
               />
               <input
                 type="text"
                 value={previousOwnersInput}
                 onChange={(e) => setPreviousOwnersInput(e.target.value)}
                 placeholder="Previous owners (comma-separated)"
-                className="rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2 text-sm text-white"
+                className="rounded-xl border border-hairline-strong bg-inset px-3.5 py-2 text-sm text-ink"
               />
 
               <input
@@ -501,14 +501,14 @@ export function LifeBehindObjectsModule() {
                 value={connectedPeopleInput}
                 onChange={(e) => setConnectedPeopleInput(e.target.value)}
                 placeholder="Connected people (comma-separated)"
-                className="rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2 text-sm text-white"
+                className="rounded-xl border border-hairline-strong bg-inset px-3.5 py-2 text-sm text-ink"
               />
               <input
                 type="text"
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
                 placeholder="Tags (comma-separated)"
-                className="rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2 text-sm text-white"
+                className="rounded-xl border border-hairline-strong bg-inset px-3.5 py-2 text-sm text-ink"
               />
 
               <textarea
@@ -516,13 +516,13 @@ export function LifeBehindObjectsModule() {
                 value={historicalNotes}
                 onChange={(e) => setHistoricalNotes(e.target.value)}
                 placeholder="Historical or restoration notes (optional)"
-                className="sm:col-span-2 rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2 text-sm text-white"
+                className="sm:col-span-2 rounded-xl border border-hairline-strong bg-inset px-3.5 py-2 text-sm text-ink"
               />
             </div>
 
             {memories.length > 0 && (
               <div className="space-y-1.5">
-                <label className="text-xs text-slate-400 block">Link Related ECHO Memories</label>
+                <label className="text-xs text-ink-muted block">Link Related ECHO Memories</label>
                 <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto">
                   {memories.slice(0, 12).map((m) => {
                     const checked = relatedMemoryIds.includes(m.id);
@@ -536,7 +536,7 @@ export function LifeBehindObjectsModule() {
                           )
                         }
                         className={`rounded-lg border px-2.5 py-1 text-xs ${
-                          checked ? 'border-sky-400 bg-sky-400/20 text-sky-100' : 'border-white/10 bg-[#070B14] text-slate-400'
+                          checked ? 'border-sky-400 bg-sky-400/20 text-sky-800 dark:text-sky-100' : 'border-hairline-strong bg-inset text-ink-muted'
                         }`}
                       >
                         {m.title}
@@ -561,18 +561,18 @@ export function LifeBehindObjectsModule() {
               />
             </div>
 
-            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-ink-secondary cursor-pointer">
               <input
                 type="checkbox"
                 checked={isPublic}
                 onChange={(e) => setIsPublic(e.target.checked)}
-                className="rounded border-white/20 bg-[#070B14]"
+                className="rounded border-hairline-strong bg-inset"
               />
               Allow public read-only sharing via link & QR code
             </label>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setEditorOpen(false)} className="px-4 py-2 text-xs text-slate-300">
+              <button type="button" onClick={() => setEditorOpen(false)} className="px-4 py-2 text-xs text-ink-secondary">
                 Cancel
               </button>
               <button type="submit" className="rounded-xl bg-rose-400 px-5 py-2 text-xs font-semibold text-slate-950">
@@ -730,7 +730,7 @@ export function DreamArchiveModule() {
 
   return (
     <div className="space-y-6 min-w-0 w-full">
-      <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0D1424] w-full">
+      <div className="relative overflow-hidden rounded-2xl border border-hairline bg-[#0D1424] w-full">
         <SafeImage
           src="/src/assets/images/echo_dream_nebula_1795260972846.jpg"
           alt="Twilight alpine lake with soft violet and coral reflections"
@@ -755,7 +755,7 @@ export function DreamArchiveModule() {
       </div>
 
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 min-w-0 w-full">
-        <div className="w-full lg:w-auto min-w-0 flex items-center gap-1 p-1 rounded-xl bg-[#0D1424] border border-white/[0.08] overflow-x-auto no-scrollbar">
+        <div className="w-full lg:w-auto min-w-0 flex items-center gap-1 p-1 rounded-xl bg-surface border border-hairline overflow-x-auto no-scrollbar">
           {[
             { id: 'timeline', label: 'Dream Timeline' },
             { id: 'calendar', label: 'Dream Calendar' },
@@ -766,7 +766,7 @@ export function DreamArchiveModule() {
               type="button"
               onClick={() => setView(t.id as typeof view)}
               className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap shrink-0 ${
-                view === t.id ? 'bg-indigo-400 text-slate-950 font-semibold' : 'text-slate-300 hover:text-white'
+                view === t.id ? 'bg-indigo-400 text-slate-950 font-semibold' : 'text-ink-secondary hover:text-ink'
               }`}
             >
               {t.label}
@@ -776,20 +776,20 @@ export function DreamArchiveModule() {
 
         <div className="flex flex-wrap items-center gap-2 min-w-0 w-full lg:w-auto">
           <div className="relative w-full sm:w-48 min-w-0">
-            <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && void loadDreams()}
               placeholder="Search dreams..."
-              className="w-full rounded-xl border border-white/10 bg-[#0D1424] pl-8 pr-3 py-2 text-xs text-white"
+              className="w-full rounded-xl border border-hairline-strong bg-surface pl-8 pr-3 py-2 text-xs text-ink"
             />
           </div>
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
-            className="rounded-xl border border-white/10 bg-[#0D1424] px-3 py-2 text-xs text-white"
+            className="rounded-xl border border-hairline-strong bg-surface px-3 py-2 text-xs text-ink"
           >
             <option value="All">All Categories</option>
             {DREAM_CATEGORIES.map((c) => (
@@ -800,7 +800,7 @@ export function DreamArchiveModule() {
             type="button"
             onClick={() => setRecurringOnly((r) => !r)}
             className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium ${
-              recurringOnly ? 'border-indigo-400/50 bg-indigo-400/15 text-indigo-200' : 'border-white/10 bg-[#0D1424] text-slate-300'
+              recurringOnly ? 'border-indigo-400/50 bg-indigo-400/15 text-indigo-800 dark:text-indigo-200' : 'border-hairline-strong bg-surface text-ink-secondary'
             }`}
           >
             <Repeat className="w-3.5 h-3.5" /> Recurring
@@ -810,41 +810,41 @@ export function DreamArchiveModule() {
 
       {view === 'timeline' && (
         loading ? (
-          <div className="h-44 rounded-2xl bg-white/[0.04] animate-pulse" />
+          <div className="h-44 rounded-2xl bg-tint animate-pulse" />
         ) : dreams.length === 0 ? (
-          <div className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-10 text-center space-y-3">
-            <Moon className="w-8 h-8 text-indigo-300 mx-auto" />
-            <h2 className="font-display text-lg font-semibold text-white">No dreams recorded yet</h2>
-            <p className="text-sm text-slate-400 max-w-md mx-auto">
+          <div className="rounded-2xl border border-hairline bg-surface p-10 text-center space-y-3">
+            <Moon className="w-8 h-8 text-indigo-600 dark:text-indigo-300 mx-auto" />
+            <h2 className="font-display text-lg font-semibold text-ink">No dreams recorded yet</h2>
+            <p className="text-sm text-ink-muted max-w-md mx-auto">
               Log fragments before they fade — add emotions, vividness, voice recordings, and tags.
             </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {dreams.map((d) => (
-              <article key={d.id} className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 space-y-3">
-                <div className="flex items-center justify-between text-xs text-slate-400">
+              <article key={d.id} className="rounded-2xl border border-hairline bg-surface p-6 space-y-3">
+                <div className="flex items-center justify-between text-xs text-ink-muted">
                   <span className="font-mono tabular-nums">
                     {d.dreamDate} · {d.category} · {d.emotion} · Vividness {d.vividness}/5
                   </span>
-                  <button type="button" onClick={() => void handleDelete(d.id)} className="text-slate-500 hover:text-rose-300 p-1">
+                  <button type="button" onClick={() => void handleDelete(d.id)} className="text-ink-muted hover:text-rose-600 dark:hover:text-rose-300 p-1">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                <h3 className="font-display text-lg font-bold text-white">
-                  {d.title} {d.isRecurring && <span className="text-xs font-normal text-indigo-300">· Recurring</span>}
+                <h3 className="font-display text-lg font-bold text-ink">
+                  {d.title} {d.isRecurring && <span className="text-xs font-normal text-indigo-700 dark:text-indigo-300">· Recurring</span>}
                 </h3>
-                <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{d.content}</p>
+                <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap">{d.content}</p>
                 {d.imageMediaId && <AuthMedia mediaId={d.imageMediaId} className="max-h-48" />}
                 {d.voiceMediaId && <AuthMedia mediaId={d.voiceMediaId} mimeTypeHint="audio/webm" />}
                 {d.aiReflection && (
-                  <div className="rounded-xl border border-indigo-400/20 bg-indigo-500/5 p-3 text-xs text-indigo-100 whitespace-pre-wrap">
-                    <span className="font-semibold text-indigo-300">Personal Reflection Prompt: </span>
+                  <div className="rounded-xl border border-indigo-400/25 bg-indigo-500/10 p-3 text-xs text-indigo-900 dark:text-indigo-100 whitespace-pre-wrap">
+                    <span className="font-semibold text-indigo-700 dark:text-indigo-300">Personal Reflection Prompt: </span>
                     {d.aiReflection}
                   </div>
                 )}
                 {d.tags.length > 0 && (
-                  <div className="text-xs text-indigo-300/80">#{d.tags.join(' #')}</div>
+                  <div className="text-xs text-indigo-700 dark:text-indigo-300/80">#{d.tags.join(' #')}</div>
                 )}
               </article>
             ))}
@@ -853,16 +853,16 @@ export function DreamArchiveModule() {
       )}
 
       {view === 'calendar' && (
-        <div className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-4 sm:p-6 space-y-4">
+        <div className="rounded-2xl border border-hairline bg-surface p-4 sm:p-6 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <h2 className="font-display text-lg font-semibold text-white inline-flex items-center gap-2">
-              <CalendarIcon className="w-4 h-4 text-indigo-300" /> Dream Calendar
+            <h2 className="font-display text-lg font-semibold text-ink inline-flex items-center gap-2">
+              <CalendarIcon className="w-4 h-4 text-indigo-600 dark:text-indigo-300" /> Dream Calendar
             </h2>
             <input
               type="month"
               value={calendarMonth}
               onChange={(e) => setCalendarMonth(e.target.value)}
-              className="rounded-xl border border-white/10 bg-[#070B14] px-3 py-1.5 text-xs text-white font-mono w-full sm:w-auto"
+              className="rounded-xl border border-hairline-strong bg-inset px-3 py-1.5 text-xs text-ink font-mono w-full sm:w-auto"
             />
           </div>
           <div className="grid grid-cols-7 gap-1 sm:gap-2 text-xs">
@@ -873,13 +873,13 @@ export function DreamArchiveModule() {
                   !cell.day
                     ? 'border-transparent'
                     : cell.items.length > 0
-                    ? 'border-indigo-400/35 bg-[#12162E]'
-                    : 'border-white/[0.06] bg-[#070B14]'
+                    ? 'border-indigo-400/40 bg-surface-raised'
+                    : 'border-hairline bg-inset'
                 }`}
               >
-                <div className="font-mono text-slate-400 tabular-nums">{cell.day || ''}</div>
+                <div className="font-mono text-ink-muted tabular-nums">{cell.day || ''}</div>
                 {cell.items.map((x) => (
-                  <div key={x.id} className="text-[11px] text-indigo-200 truncate mt-1">{x.title}</div>
+                  <div key={x.id} className="text-[11px] text-indigo-700 dark:text-indigo-200 truncate mt-1">{x.title}</div>
                 ))}
               </div>
             ))}
@@ -889,40 +889,40 @@ export function DreamArchiveModule() {
 
       {view === 'patterns' && patterns && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 space-y-4">
-            <h2 className="font-display text-lg font-semibold text-white">Recurring Motifs & Tags</h2>
-            <div className="text-xs text-slate-400 font-mono tabular-nums">
+          <div className="rounded-2xl border border-hairline bg-surface p-6 space-y-4">
+            <h2 className="font-display text-lg font-semibold text-ink">Recurring Motifs & Tags</h2>
+            <div className="text-xs text-ink-muted font-mono tabular-nums">
               {patterns.totalDreams} dreams logged · {patterns.recurringCount} marked recurring
             </div>
             {patterns.topTags.length === 0 ? (
-              <p className="text-xs text-slate-400">Add tags to your dreams to uncover recurring motifs.</p>
+              <p className="text-xs text-ink-muted">Add tags to your dreams to uncover recurring motifs.</p>
             ) : (
               <div className="space-y-2">
                 {patterns.topTags.map((t) => (
-                  <div key={t.tag} className="flex items-center justify-between text-xs border-b border-white/[0.06] pb-2">
-                    <span className="text-slate-200">#{t.tag}</span>
-                    <span className="font-mono text-indigo-300 tabular-nums">{t.count}</span>
+                  <div key={t.tag} className="flex items-center justify-between text-xs border-b border-hairline pb-2">
+                    <span className="text-ink-secondary">#{t.tag}</span>
+                    <span className="font-mono text-indigo-700 dark:text-indigo-300 tabular-nums">{t.count}</span>
                   </div>
                 ))}
               </div>
             )}
           </div>
 
-          <div className="rounded-2xl border border-white/[0.08] bg-[#0D1424] p-6 space-y-4">
-            <h2 className="font-display text-lg font-semibold text-white">Emotional Landscape</h2>
+          <div className="rounded-2xl border border-hairline bg-surface p-6 space-y-4">
+            <h2 className="font-display text-lg font-semibold text-ink">Emotional Landscape</h2>
             {patterns.topEmotions.length === 0 ? (
-              <p className="text-xs text-slate-400">Log dream emotions to see patterns across nights.</p>
+              <p className="text-xs text-ink-muted">Log dream emotions to see patterns across nights.</p>
             ) : (
               <div className="space-y-2">
                 {patterns.topEmotions.map((em) => (
-                  <div key={em.emotion} className="flex items-center justify-between text-xs border-b border-white/[0.06] pb-2">
-                    <span className="text-slate-200">{em.emotion}</span>
-                    <span className="font-mono text-rose-300 tabular-nums">{em.count}</span>
+                  <div key={em.emotion} className="flex items-center justify-between text-xs border-b border-hairline pb-2">
+                    <span className="text-ink-secondary">{em.emotion}</span>
+                    <span className="font-mono text-rose-600 dark:text-rose-300 tabular-nums">{em.count}</span>
                   </div>
                 ))}
               </div>
             )}
-            <p className="text-[11px] text-slate-400 pt-2">
+            <p className="text-[11px] text-ink-muted pt-2">
               Note: Dream reflections and patterns in ECHO are personal journaling aids, never medical diagnoses or predictive claims.
             </p>
           </div>
@@ -930,11 +930,11 @@ export function DreamArchiveModule() {
       )}
 
       {editorOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto">
-          <form onSubmit={handleSaveDream} className="w-full max-w-2xl rounded-2xl border border-white/12 bg-[#0D1424] p-4 sm:p-6 space-y-4 my-4 sm:my-8">
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <form onSubmit={handleSaveDream} className="w-full max-w-2xl rounded-2xl border border-hairline-strong bg-surface p-4 sm:p-6 space-y-4 my-4 sm:my-8">
             <div className="flex items-center justify-between">
-              <h2 className="font-display text-xl font-bold text-white">Record a Dream</h2>
-              <button type="button" onClick={() => setEditorOpen(false)} className="text-slate-400 hover:text-white">
+              <h2 className="font-display text-xl font-bold text-ink">Record a Dream</h2>
+              <button type="button" onClick={() => setEditorOpen(false)} className="text-ink-muted hover:text-ink">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -946,7 +946,7 @@ export function DreamArchiveModule() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Dream title"
-                className="sm:col-span-2 rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+                className="sm:col-span-2 rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
               />
               <textarea
                 required
@@ -954,23 +954,23 @@ export function DreamArchiveModule() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Describe scenes, symbols, feelings, or fragments..."
-                className="sm:col-span-2 rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2.5 text-sm text-white"
+                className="sm:col-span-2 rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink"
               />
               <div>
-                <label className="text-xs text-slate-400 block mb-1">Date</label>
+                <label className="text-xs text-ink-muted block mb-1">Date</label>
                 <input
                   type="date"
                   value={dreamDate}
                   onChange={(e) => setDreamDate(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3 py-2 text-sm text-white font-mono"
+                  className="w-full rounded-xl border border-hairline-strong bg-inset px-3 py-2 text-sm text-ink font-mono"
                 />
               </div>
               <div>
-                <label className="text-xs text-slate-400 block mb-1">Emotion</label>
+                <label className="text-xs text-ink-muted block mb-1">Emotion</label>
                 <select
                   value={emotion}
                   onChange={(e) => setEmotion(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3 py-2 text-sm text-white"
+                  className="w-full rounded-xl border border-hairline-strong bg-inset px-3 py-2 text-sm text-ink"
                 >
                   {DREAM_EMOTIONS.map((em) => (
                     <option key={em} value={em}>{em}</option>
@@ -978,11 +978,11 @@ export function DreamArchiveModule() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-slate-400 block mb-1">Category</label>
+                <label className="text-xs text-ink-muted block mb-1">Category</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  className="w-full rounded-xl border border-white/10 bg-[#070B14] px-3 py-2 text-sm text-white"
+                  className="w-full rounded-xl border border-hairline-strong bg-inset px-3 py-2 text-sm text-ink"
                 >
                   {DREAM_CATEGORIES.map((c) => (
                     <option key={c} value={c}>{c}</option>
@@ -990,7 +990,7 @@ export function DreamArchiveModule() {
                 </select>
               </div>
               <div>
-                <label className="text-xs text-slate-400 block mb-1">Vividness ({vividness}/5)</label>
+                <label className="text-xs text-ink-muted block mb-1">Vividness ({vividness}/5)</label>
                 <input
                   type="range"
                   min={1}
@@ -1005,14 +1005,14 @@ export function DreamArchiveModule() {
                 value={location}
                 onChange={(e) => setLocation(e.target.value)}
                 placeholder="Dream setting / place"
-                className="rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2 text-sm text-white"
+                className="rounded-xl border border-hairline-strong bg-inset px-3.5 py-2 text-sm text-ink"
               />
               <input
                 type="text"
                 value={tagsInput}
                 onChange={(e) => setTagsInput(e.target.value)}
                 placeholder="Tags (comma-separated)"
-                className="rounded-xl border border-white/10 bg-[#070B14] px-3.5 py-2 text-sm text-white"
+                className="rounded-xl border border-hairline-strong bg-inset px-3.5 py-2 text-sm text-ink"
               />
             </div>
 
@@ -1032,7 +1032,7 @@ export function DreamArchiveModule() {
                 type="button"
                 disabled={aiBusy || !content.trim()}
                 onClick={() => void handleGenerateReflection(content)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-400/35 bg-indigo-400/10 px-3.5 py-2 text-xs font-medium text-indigo-200 disabled:opacity-40"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-indigo-400/35 bg-indigo-400/10 px-3.5 py-2 text-xs font-medium text-indigo-800 dark:text-indigo-200 disabled:opacity-40"
               >
                 <Sparkles className="w-3.5 h-3.5" />
                 {aiBusy ? 'Reflecting...' : 'AI Reflection Prompt'}
@@ -1040,23 +1040,23 @@ export function DreamArchiveModule() {
             </div>
 
             {aiReflection && (
-              <div className="rounded-xl border border-indigo-400/25 bg-indigo-500/10 p-3 text-xs text-indigo-100 whitespace-pre-wrap">
+              <div className="rounded-xl border border-indigo-400/25 bg-indigo-500/10 p-3 text-xs text-indigo-900 dark:text-indigo-100 whitespace-pre-wrap">
                 {aiReflection}
               </div>
             )}
 
-            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+            <label className="flex items-center gap-2 text-xs text-ink-secondary cursor-pointer">
               <input
                 type="checkbox"
                 checked={isRecurring}
                 onChange={(e) => setIsRecurring(e.target.checked)}
-                className="rounded border-white/20 bg-[#070B14]"
+                className="rounded border-hairline-strong bg-inset"
               />
               Mark as recurring dream
             </label>
 
             <div className="flex justify-end gap-2 pt-2">
-              <button type="button" onClick={() => setEditorOpen(false)} className="px-4 py-2 text-xs text-slate-300">
+              <button type="button" onClick={() => setEditorOpen(false)} className="px-4 py-2 text-xs text-ink-secondary">
                 Cancel
               </button>
               <button type="submit" className="rounded-xl bg-indigo-400 px-5 py-2 text-xs font-semibold text-slate-950">
