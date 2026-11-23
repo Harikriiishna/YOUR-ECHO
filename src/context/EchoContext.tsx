@@ -24,6 +24,8 @@ interface EchoContextValue {
   setActiveModule: (mod: ModuleId) => void;
   focusItemId: string | null;
   navigateTo: (mod: ModuleId, itemId?: string | null) => void;
+  canGoBack: boolean;
+  goBack: () => void;
   notifications: NotificationItem[];
   unreadCount: number;
   refreshNotifications: () => Promise<void>;
@@ -50,8 +52,13 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [theme, setThemeState] = useState<EchoThemeId>(() => getSavedThemeId());
-  const [activeModule, setActiveModule] = useState<ModuleId>('home');
+  const [navState, setNavState] = useState<{ current: ModuleId; history: ModuleId[] }>({
+    current: 'home',
+    history: [],
+  });
   const [focusItemId, setFocusItemId] = useState<string | null>(null);
+  const activeModule = navState.current;
+  const canGoBack = navState.history.length > 0 || activeModule !== 'home';
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [isOnline, setIsOnline] = useState<boolean>(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
   const [pendingMutations, setPendingMutations] = useState<PendingOfflineMutation[]>([]);
@@ -89,8 +96,36 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
   );
 
   const navigateTo = useCallback((mod: ModuleId, itemId: string | null = null) => {
-    setActiveModule(mod);
+    setNavState((prev) =>
+      prev.current === mod
+        ? prev
+        : { current: mod, history: [...prev.history.slice(-29), prev.current] }
+    );
     setFocusItemId(itemId);
+  }, []);
+
+  const setActiveModule = useCallback(
+    (mod: ModuleId) => {
+      navigateTo(mod, null);
+    },
+    [navigateTo]
+  );
+
+  const goBack = useCallback(() => {
+    setFocusItemId(null);
+    setNavState((prev) => {
+      if (prev.history.length > 0) {
+        const previousModule = prev.history[prev.history.length - 1];
+        return {
+          current: previousModule,
+          history: prev.history.slice(0, -1),
+        };
+      }
+      if (prev.current !== 'home') {
+        return { current: 'home', history: [] };
+      }
+      return prev;
+    });
   }, []);
 
   const refreshUser = useCallback(async () => {
@@ -270,7 +305,8 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
     setAuthToken(null);
     setUser(null);
     setNotifications([]);
-    setActiveModule('home');
+    setNavState({ current: 'home', history: [] });
+    setFocusItemId(null);
   }, []);
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
@@ -286,6 +322,8 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
         setActiveModule,
         focusItemId,
         navigateTo,
+        canGoBack,
+        goBack,
         notifications,
         unreadCount,
         refreshNotifications,

@@ -2,7 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { Router } from 'express';
 import multer from 'multer';
-import { type AuthenticatedRequest, requireAuth } from '../auth.ts';
+import {
+  analyzeMemoryBatchSentiment,
+  analyzeMemorySentiment,
+  EMOTIONAL_IMPACT_LEVELS,
+} from '../ai.ts';
+import { type AuthenticatedRequest, rateLimit, requireAuth } from '../auth.ts';
 import { db, newId, UPLOADS_DIR } from '../db.ts';
 
 export const memoryMediaRouter = Router();
@@ -139,11 +144,52 @@ memoryMediaRouter.delete('/media/:id', requireAuth, (req: AuthenticatedRequest, 
   res.json({ deleted: true });
 });
 
+function normalizeTags(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of input) {
+    const clean = String(raw || '')
+      .trim()
+      .replace(/^#+/, '')
+      .slice(0, 40);
+    if (!clean) continue;
+    const key = clean.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(clean);
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+function syncMemoryTags(memoryId: string, tags: string[]): void {
+  db.prepare('UPDATE memories SET tags_json = ? WHERE id = ?').run(JSON.stringify(tags), memoryId);
+  db.prepare('DELETE FROM memory_tags WHERE memory_id = ?').run(memoryId);
+  const insTag = db.prepare('INSERT INTO memory_tags (id, memory_id, tag) VALUES (?, ?, ?)');
+  for (const t of tags) {
+    insTag.run(newId('tag'), memoryId, t);
+  }
+}
+
 function hydrateMemoryRow(row: Record<string, unknown>) {
   const id = String(row.id);
-  const tags = (db.prepare('SELECT tag FROM memory_tags WHERE memory_id = ?').all(id) as Array<{ tag: string }>).map(
-    (t) => t.tag
-  );
+  let tags: string[] = [];
+  try {
+    const parsed = JSON.parse(String(row.tags_json || '[]'));
+    if (Array.isArray(parsed)) {
+      tags = normalizeTags(parsed);
+    }
+  } catch {
+    tags = [];
+  }
+  if (tags.length === 0) {
+    const relTags = (db.prepare('SELECT tag FROM memory_tags WHERE memory_id = ?').all(id) as Array<{ tag: string }>).map(
+      (t) => t.tag
+    );
+    tags = normalizeTags(relTags);
+  }
+
   const people = (
     db.prepare('SELECT person_name FROM memory_people WHERE memory_id = ?').all(id) as Array<{ person_name: string }>
   ).map((p) => p.person_name);
@@ -175,6 +221,10 @@ function hydrateMemoryRow(row: Record<string, unknown>) {
     isFavorite: Boolean(row.is_favorite),
     aiExcluded: Boolean(row.ai_excluded),
     aiSummary: String(row.ai_summary || ''),
+    sentimentTone: String(row.sentiment_tone || ''),
+    emotionalImpact: String(row.emotional_impact || ''),
+    sentimentScore: row.sentiment_score !== null && row.sentiment_score !== undefined ? Number(row.sentiment_score) : null,
+    sentimentRationale: String(row.sentiment_rationale || ''),
     collectionId: row.collection_id ? String(row.collection_id) : null,
     tags,
     people,
@@ -186,7 +236,8 @@ function hydrateMemoryRow(row: Record<string, unknown>) {
 
 memoryMediaRouter.get('/memories', requireAuth, (req: AuthenticatedRequest, res) => {
   const userId = req.authUser!.id;
-  const { q, category, mood, favorite, collectionId, person, tag, month } = req.query as Record<string, string | undefined>;
+  const { q, category, mood, tone, impact, impacts, favorite, collectionId, person, tag, tags, tagMode, month } =
+    req.query as Record<string, string | undefined>;
 
   let sql = 'SELECT DISTINCT m.* FROM memories m';
   const joins: string[] = [];
@@ -198,18 +249,57 @@ memoryMediaRouter.get('/memories', requireAuth, (req: AuthenticatedRequest, res)
     wheres.push('LOWER(mp.person_name) = LOWER(?)');
     params.push(person.trim());
   }
-  if (tag) {
-    joins.push('JOIN memory_tags mt ON mt.memory_id = m.id');
-    wheres.push('LOWER(mt.tag) = LOWER(?)');
-    params.push(tag.trim());
+
+  const requestedTags = tags
+    ? tags
+        .split(',')
+        .map((t) => t.trim().replace(/^#+/, ''))
+        .filter(Boolean)
+    : tag
+      ? [tag.trim().replace(/^#+/, '')].filter(Boolean)
+      : [];
+
+  if (requestedTags.length > 0) {
+    if (tagMode === 'all') {
+      for (const reqTag of requestedTags) {
+        wheres.push(
+          'EXISTS (SELECT 1 FROM memory_tags mt_all WHERE mt_all.memory_id = m.id AND LOWER(mt_all.tag) = LOWER(?))'
+        );
+        params.push(reqTag);
+      }
+    } else {
+      wheres.push(
+        `EXISTS (SELECT 1 FROM memory_tags mt_any WHERE mt_any.memory_id = m.id AND LOWER(mt_any.tag) IN (${requestedTags
+          .map(() => 'LOWER(?)')
+          .join(',')}))`
+      );
+      params.push(...requestedTags);
+    }
   }
+
   if (category && category !== 'All') {
     wheres.push('m.category = ?');
     params.push(category);
   }
   if (mood && mood !== 'All') {
-    wheres.push('m.mood = ?');
-    params.push(mood);
+    wheres.push('(LOWER(m.mood) = LOWER(?) OR LOWER(m.sentiment_tone) = LOWER(?))');
+    params.push(mood, mood);
+  }
+  if (tone && tone !== 'All') {
+    wheres.push('(LOWER(m.sentiment_tone) = LOWER(?) OR LOWER(m.mood) = LOWER(?))');
+    params.push(tone, tone);
+  }
+  const requestedImpacts = impacts
+    ? impacts
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean)
+    : impact && impact !== 'All'
+      ? [impact.trim()]
+      : [];
+  if (requestedImpacts.length > 0) {
+    wheres.push(`LOWER(m.emotional_impact) IN (${requestedImpacts.map(() => 'LOWER(?)').join(',')})`);
+    params.push(...requestedImpacts);
   }
   if (favorite === 'true') {
     wheres.push('m.is_favorite = 1');
@@ -232,6 +322,290 @@ memoryMediaRouter.get('/memories', requireAuth, (req: AuthenticatedRequest, res)
   const rows = db.prepare(sql).all(...params) as Array<Record<string, unknown>>;
   res.json({ memories: rows.map(hydrateMemoryRow) });
 });
+
+memoryMediaRouter.get('/memories/tags', requireAuth, (req: AuthenticatedRequest, res) => {
+  const rows = db
+    .prepare('SELECT id, tags_json FROM memories WHERE user_id = ?')
+    .all(req.authUser!.id) as Array<{ id: string; tags_json: string }>;
+
+  const tagCounts = new Map<string, { tag: string; count: number }>();
+  for (const row of rows) {
+    let list: string[] = [];
+    try {
+      list = normalizeTags(JSON.parse(row.tags_json || '[]'));
+    } catch {
+      list = [];
+    }
+    for (const tag of list) {
+      const key = tag.toLowerCase();
+      const existing = tagCounts.get(key);
+      if (existing) {
+        existing.count += 1;
+      } else {
+        tagCounts.set(key, { tag, count: 1 });
+      }
+    }
+  }
+
+  const tags = [...tagCounts.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+  res.json({ tags });
+});
+
+memoryMediaRouter.put('/memories/tags/rename', requireAuth, (req: AuthenticatedRequest, res) => {
+  const userId = req.authUser!.id;
+  const { oldTag, newTag } = req.body as { oldTag?: string; newTag?: string };
+  const cleanOld = (oldTag || '').trim().replace(/^#+/, '').slice(0, 40);
+  const cleanNew = (newTag || '').trim().replace(/^#+/, '').slice(0, 40);
+
+  if (!cleanOld || !cleanNew) {
+    res.status(400).json({ error: 'Both oldTag and newTag are required.' });
+    return;
+  }
+
+  const rows = db
+    .prepare('SELECT id, tags_json FROM memories WHERE user_id = ?')
+    .all(userId) as Array<{ id: string; tags_json: string }>;
+
+  let updatedCount = 0;
+  const now = new Date().toISOString();
+  db.transaction(() => {
+    for (const row of rows) {
+      let current: string[] = [];
+      try {
+        current = normalizeTags(JSON.parse(row.tags_json || '[]'));
+      } catch {
+        current = [];
+      }
+      if (!current.some((t) => t.toLowerCase() === cleanOld.toLowerCase())) continue;
+
+      const replaced = normalizeTags(
+        current.map((t) => (t.toLowerCase() === cleanOld.toLowerCase() ? cleanNew : t))
+      );
+      syncMemoryTags(row.id, replaced);
+      db.prepare('UPDATE memories SET updated_at = ? WHERE id = ?').run(now, row.id);
+      updatedCount += 1;
+    }
+  })();
+
+  res.json({ updatedCount, oldTag: cleanOld, newTag: cleanNew });
+});
+
+memoryMediaRouter.delete('/memories/tags/:tag', requireAuth, (req: AuthenticatedRequest, res) => {
+  const userId = req.authUser!.id;
+  const cleanTarget = decodeURIComponent(req.params.tag || '')
+    .trim()
+    .replace(/^#+/, '');
+
+  if (!cleanTarget) {
+    res.status(400).json({ error: 'Tag name is required.' });
+    return;
+  }
+
+  const rows = db
+    .prepare('SELECT id, tags_json FROM memories WHERE user_id = ?')
+    .all(userId) as Array<{ id: string; tags_json: string }>;
+
+  let updatedCount = 0;
+  const now = new Date().toISOString();
+  db.transaction(() => {
+    for (const row of rows) {
+      let current: string[] = [];
+      try {
+        current = normalizeTags(JSON.parse(row.tags_json || '[]'));
+      } catch {
+        current = [];
+      }
+      const next = current.filter((t) => t.toLowerCase() !== cleanTarget.toLowerCase());
+      if (next.length === current.length) continue;
+
+      syncMemoryTags(row.id, next);
+      db.prepare('UPDATE memories SET updated_at = ? WHERE id = ?').run(now, row.id);
+      updatedCount += 1;
+    }
+  })();
+
+  res.json({ updatedCount, deletedTag: cleanTarget });
+});
+
+memoryMediaRouter.get('/memories/sentiment-summary', requireAuth, (req: AuthenticatedRequest, res) => {
+  const rows = db
+    .prepare('SELECT emotional_impact, sentiment_tone, mood, ai_excluded FROM memories WHERE user_id = ?')
+    .all(req.authUser!.id) as Array<{
+    emotional_impact: string;
+    sentiment_tone: string;
+    mood: string;
+    ai_excluded: number;
+  }>;
+
+  const impactCounts: Record<string, number> = {};
+  for (const lvl of EMOTIONAL_IMPACT_LEVELS) {
+    impactCounts[lvl] = 0;
+  }
+  let unanalyzedCount = 0;
+  let analyzableUnanalyzedCount = 0;
+  const toneCounts = new Map<string, { tone: string; count: number }>();
+
+  for (const r of rows) {
+    const imp = (r.emotional_impact || '').trim();
+    if (imp) {
+      impactCounts[imp] = (impactCounts[imp] || 0) + 1;
+    } else {
+      unanalyzedCount += 1;
+      if (!r.ai_excluded) analyzableUnanalyzedCount += 1;
+    }
+    const tone = (r.sentiment_tone || r.mood || '').trim();
+    if (tone) {
+      const key = tone.toLowerCase();
+      const prev = toneCounts.get(key);
+      if (prev) prev.count += 1;
+      else toneCounts.set(key, { tone, count: 1 });
+    }
+  }
+
+  res.json({
+    totalMemories: rows.length,
+    unanalyzedCount,
+    analyzableUnanalyzedCount,
+    impactCounts,
+    tones: [...toneCounts.values()].sort((a, b) => b.count - a.count || a.tone.localeCompare(b.tone)),
+  });
+});
+
+memoryMediaRouter.post(
+  '/memories/analyze-sentiment-batch',
+  requireAuth,
+  rateLimit('ai', 10, 60_000),
+  async (req: AuthenticatedRequest, res) => {
+    const user = req.authUser!;
+    if (!user.aiConsent) {
+      res.status(403).json({ error: 'AI features are currently disabled in your privacy settings.' });
+      return;
+    }
+
+    const { memoryIds, applyMood } = req.body as { memoryIds?: string[]; applyMood?: boolean };
+    let candidates: Array<{ id: string; title: string; content: string; mood: string }>;
+
+    if (Array.isArray(memoryIds) && memoryIds.length > 0) {
+      const cleanIds = memoryIds.map((x) => String(x)).slice(0, 15);
+      candidates = db
+        .prepare(
+          `SELECT id, title, content, mood FROM memories WHERE user_id = ? AND ai_excluded = 0 AND id IN (${cleanIds
+            .map(() => '?')
+            .join(',')})`
+        )
+        .all(user.id, ...cleanIds) as Array<{ id: string; title: string; content: string; mood: string }>;
+    } else {
+      candidates = db
+        .prepare(
+          "SELECT id, title, content, mood FROM memories WHERE user_id = ? AND ai_excluded = 0 AND (emotional_impact = '' OR emotional_impact IS NULL) ORDER BY memory_date DESC LIMIT 15"
+        )
+        .all(user.id) as Array<{ id: string; title: string; content: string; mood: string }>;
+    }
+
+    if (candidates.length === 0) {
+      res.json({ analyzedCount: 0, memories: [] });
+      return;
+    }
+
+    try {
+      const results = await analyzeMemoryBatchSentiment(candidates);
+      const now = new Date().toISOString();
+      const updStmt = db.prepare(`
+        UPDATE memories
+        SET sentiment_tone = ?, emotional_impact = ?, sentiment_score = ?, sentiment_rationale = ?, mood = ?, updated_at = ?
+        WHERE id = ? AND user_id = ?
+      `);
+
+      const byId = new Map(candidates.map((c) => [c.id, c]));
+      db.transaction(() => {
+        for (const r of results) {
+          const orig = byId.get(r.id);
+          const nextMood = applyMood !== false ? r.suggestedMood : orig?.mood || r.suggestedMood;
+          updStmt.run(
+            r.tone,
+            r.emotionalImpact,
+            r.valenceScore,
+            r.rationale,
+            nextMood.slice(0, 40),
+            now,
+            r.id,
+            user.id
+          );
+        }
+      })();
+
+      const updatedRows = db
+        .prepare(
+          `SELECT * FROM memories WHERE user_id = ? AND id IN (${results.map(() => '?').join(',')})`
+        )
+        .all(user.id, ...results.map((r) => r.id)) as Array<Record<string, unknown>>;
+
+      res.json({
+        analyzedCount: results.length,
+        memories: updatedRows.map(hydrateMemoryRow),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Batch sentiment analysis failed.';
+      res.status(502).json({ error: message });
+    }
+  }
+);
+
+memoryMediaRouter.post(
+  '/memories/:id/analyze-sentiment',
+  requireAuth,
+  rateLimit('ai', 20, 60_000),
+  async (req: AuthenticatedRequest, res) => {
+    const user = req.authUser!;
+    if (!user.aiConsent) {
+      res.status(403).json({ error: 'AI features are currently disabled in your privacy settings.' });
+      return;
+    }
+
+    const existing = db
+      .prepare('SELECT id, title, content, mood, ai_excluded FROM memories WHERE id = ? AND user_id = ?')
+      .get(req.params.id, user.id) as
+      | { id: string; title: string; content: string; mood: string; ai_excluded: number }
+      | undefined;
+
+    if (!existing) {
+      res.status(404).json({ error: 'Memory not found.' });
+      return;
+    }
+
+    const { applyMood } = req.body as { applyMood?: boolean };
+    try {
+      const sentiment = await analyzeMemorySentiment({
+        title: existing.title,
+        content: existing.content,
+        currentMood: existing.mood,
+      });
+
+      const nextMood = applyMood !== false ? sentiment.suggestedMood : existing.mood;
+      const now = new Date().toISOString();
+      db.prepare(`
+        UPDATE memories
+        SET sentiment_tone = ?, emotional_impact = ?, sentiment_score = ?, sentiment_rationale = ?, mood = ?, updated_at = ?
+        WHERE id = ? AND user_id = ?
+      `).run(
+        sentiment.tone,
+        sentiment.emotionalImpact,
+        sentiment.valenceScore,
+        sentiment.rationale,
+        nextMood.slice(0, 40),
+        now,
+        existing.id,
+        user.id
+      );
+
+      const updated = db.prepare('SELECT * FROM memories WHERE id = ?').get(existing.id) as Record<string, unknown>;
+      res.json({ memory: hydrateMemoryRow(updated), sentiment });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Sentiment analysis failed.';
+      res.status(502).json({ error: message });
+    }
+  }
+);
 
 memoryMediaRouter.get('/memories/on-this-day', requireAuth, (req: AuthenticatedRequest, res) => {
   const userId = req.authUser!.id;
@@ -291,7 +665,7 @@ memoryMediaRouter.get('/memories/:id/related', requireAuth, (req: AuthenticatedR
   res.json({ related });
 });
 
-memoryMediaRouter.post('/memories', requireAuth, (req: AuthenticatedRequest, res) => {
+memoryMediaRouter.post('/memories', requireAuth, async (req: AuthenticatedRequest, res) => {
   const userId = req.authUser!.id;
   const body = req.body as {
     clientMutationId?: string;
@@ -306,6 +680,11 @@ memoryMediaRouter.post('/memories', requireAuth, (req: AuthenticatedRequest, res
     isFavorite?: boolean;
     aiExcluded?: boolean;
     aiSummary?: string;
+    sentimentTone?: string;
+    emotionalImpact?: string;
+    sentimentScore?: number | null;
+    sentimentRationale?: string;
+    autoAnalyzeSentiment?: boolean;
     collectionId?: string | null;
     tags?: string[];
     people?: string[];
@@ -334,17 +713,38 @@ memoryMediaRouter.post('/memories', requireAuth, (req: AuthenticatedRequest, res
     return;
   }
 
+  let resolvedMood = (body.mood || 'Reflective').slice(0, 40);
+  let resolvedTone = (body.sentimentTone || '').slice(0, 40);
+  let resolvedImpact = (body.emotionalImpact || '').slice(0, 40);
+  let resolvedScore = typeof body.sentimentScore === 'number' ? Math.round(body.sentimentScore) : null;
+  let resolvedRationale = (body.sentimentRationale || '').slice(0, 280);
+
+  if (body.autoAnalyzeSentiment && req.authUser!.aiConsent && !body.aiExcluded && !resolvedImpact) {
+    try {
+      const analyzed = await analyzeMemorySentiment({ title, content, currentMood: resolvedMood });
+      resolvedTone = analyzed.tone;
+      resolvedImpact = analyzed.emotionalImpact;
+      resolvedScore = analyzed.valenceScore;
+      resolvedRationale = analyzed.rationale;
+      if (!body.mood || body.mood === 'Reflective') {
+        resolvedMood = analyzed.suggestedMood.slice(0, 40);
+      }
+    } catch {
+      // Non-blocking fallback: save memory even if optional auto-sentiment fails
+    }
+  }
+
   const id = newId('mem');
   const now = new Date().toISOString();
   const memoryDate = body.memoryDate || now.slice(0, 10);
-  const tags = Array.isArray(body.tags) ? body.tags.map((t) => String(t).trim()).filter(Boolean).slice(0, 15) : [];
+  const tags = normalizeTags(body.tags);
   const people = Array.isArray(body.people) ? body.people.map((p) => String(p).trim()).filter(Boolean).slice(0, 15) : [];
   const mediaIds = Array.isArray(body.mediaIds) ? body.mediaIds.filter(Boolean).slice(0, 10) : [];
 
   db.transaction(() => {
     db.prepare(`
-      INSERT INTO memories (id, user_id, title, content, memory_date, location_name, latitude, longitude, mood, category, is_favorite, ai_excluded, ai_summary, collection_id, media_ids_json, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO memories (id, user_id, title, content, memory_date, location_name, latitude, longitude, mood, category, is_favorite, ai_excluded, ai_summary, sentiment_tone, emotional_impact, sentiment_score, sentiment_rationale, collection_id, tags_json, media_ids_json, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
       userId,
@@ -354,19 +754,24 @@ memoryMediaRouter.post('/memories', requireAuth, (req: AuthenticatedRequest, res
       (body.locationName || '').slice(0, 140),
       typeof body.latitude === 'number' ? body.latitude : null,
       typeof body.longitude === 'number' ? body.longitude : null,
-      (body.mood || 'Reflective').slice(0, 40),
+      resolvedMood,
       (body.category || 'Important moments').slice(0, 50),
       body.isFavorite ? 1 : 0,
       body.aiExcluded ? 1 : 0,
       (body.aiSummary || '').slice(0, 600),
+      resolvedTone,
+      resolvedImpact,
+      resolvedScore,
+      resolvedRationale,
       body.collectionId || null,
+      JSON.stringify(tags),
       JSON.stringify(mediaIds),
       now,
       now
     );
 
     const insTag = db.prepare('INSERT INTO memory_tags (id, memory_id, tag) VALUES (?, ?, ?)');
-    for (const t of tags) insTag.run(newId('tag'), id, t.slice(0, 40));
+    for (const t of tags) insTag.run(newId('tag'), id, t);
 
     const insPerson = db.prepare('INSERT INTO memory_people (id, memory_id, person_name) VALUES (?, ?, ?)');
     for (const p of people) insPerson.run(newId('ppl'), id, p.slice(0, 60));
@@ -407,6 +812,10 @@ memoryMediaRouter.put('/memories/:id', requireAuth, (req: AuthenticatedRequest, 
     isFavorite?: boolean;
     aiExcluded?: boolean;
     aiSummary?: string;
+    sentimentTone?: string;
+    emotionalImpact?: string;
+    sentimentScore?: number | null;
+    sentimentRationale?: string;
     collectionId?: string | null;
     tags?: string[];
     people?: string[];
@@ -417,7 +826,7 @@ memoryMediaRouter.put('/memories/:id', requireAuth, (req: AuthenticatedRequest, 
   db.transaction(() => {
     db.prepare(`
       UPDATE memories
-      SET title = ?, content = ?, memory_date = ?, location_name = ?, latitude = ?, longitude = ?, mood = ?, category = ?, is_favorite = ?, ai_excluded = ?, ai_summary = ?, collection_id = ?, media_ids_json = ?, updated_at = ?
+      SET title = ?, content = ?, memory_date = ?, location_name = ?, latitude = ?, longitude = ?, mood = ?, category = ?, is_favorite = ?, ai_excluded = ?, ai_summary = ?, sentiment_tone = ?, emotional_impact = ?, sentiment_score = ?, sentiment_rationale = ?, collection_id = ?, media_ids_json = ?, updated_at = ?
       WHERE id = ? AND user_id = ?
     `).run(
       (body.title ?? String(existing.title)).trim().slice(0, 160),
@@ -431,6 +840,12 @@ memoryMediaRouter.put('/memories/:id', requireAuth, (req: AuthenticatedRequest, 
       body.isFavorite !== undefined ? (body.isFavorite ? 1 : 0) : existing.is_favorite,
       body.aiExcluded !== undefined ? (body.aiExcluded ? 1 : 0) : existing.ai_excluded,
       body.aiSummary !== undefined ? body.aiSummary.slice(0, 600) : String(existing.ai_summary),
+      body.sentimentTone !== undefined ? body.sentimentTone.slice(0, 40) : String(existing.sentiment_tone || ''),
+      body.emotionalImpact !== undefined ? body.emotionalImpact.slice(0, 40) : String(existing.emotional_impact || ''),
+      body.sentimentScore !== undefined ? body.sentimentScore : existing.sentiment_score,
+      body.sentimentRationale !== undefined
+        ? body.sentimentRationale.slice(0, 280)
+        : String(existing.sentiment_rationale || ''),
       body.collectionId !== undefined ? body.collectionId : existing.collection_id,
       body.mediaIds !== undefined ? JSON.stringify(body.mediaIds) : String(existing.media_ids_json),
       now,
@@ -439,11 +854,7 @@ memoryMediaRouter.put('/memories/:id', requireAuth, (req: AuthenticatedRequest, 
     );
 
     if (Array.isArray(body.tags)) {
-      db.prepare('DELETE FROM memory_tags WHERE memory_id = ?').run(req.params.id);
-      const insTag = db.prepare('INSERT INTO memory_tags (id, memory_id, tag) VALUES (?, ?, ?)');
-      for (const t of body.tags.map((x) => String(x).trim()).filter(Boolean).slice(0, 15)) {
-        insTag.run(newId('tag'), req.params.id, t.slice(0, 40));
-      }
+      syncMemoryTags(req.params.id, normalizeTags(body.tags));
     }
 
     if (Array.isArray(body.people)) {
@@ -456,6 +867,33 @@ memoryMediaRouter.put('/memories/:id', requireAuth, (req: AuthenticatedRequest, 
   })();
 
   const updated = db.prepare('SELECT * FROM memories WHERE id = ?').get(req.params.id) as Record<string, unknown>;
+  res.json({ memory: hydrateMemoryRow(updated) });
+});
+
+memoryMediaRouter.post('/memories/:id/tags', requireAuth, (req: AuthenticatedRequest, res) => {
+  const userId = req.authUser!.id;
+  const existing = db
+    .prepare('SELECT id FROM memories WHERE id = ? AND user_id = ?')
+    .get(req.params.id, userId) as { id: string } | undefined;
+
+  if (!existing) {
+    res.status(404).json({ error: 'Memory not found.' });
+    return;
+  }
+
+  const { tags } = req.body as { tags?: string[] };
+  if (!Array.isArray(tags)) {
+    res.status(400).json({ error: 'tags array is required.' });
+    return;
+  }
+
+  const normalized = normalizeTags(tags);
+  db.transaction(() => {
+    syncMemoryTags(existing.id, normalized);
+    db.prepare('UPDATE memories SET updated_at = ? WHERE id = ?').run(new Date().toISOString(), existing.id);
+  })();
+
+  const updated = db.prepare('SELECT * FROM memories WHERE id = ?').get(existing.id) as Record<string, unknown>;
   res.json({ memory: hydrateMemoryRow(updated) });
 });
 

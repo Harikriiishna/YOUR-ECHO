@@ -91,7 +91,12 @@ export function initDatabase(): void {
       is_favorite INTEGER NOT NULL DEFAULT 0,
       ai_excluded INTEGER NOT NULL DEFAULT 0,
       ai_summary TEXT NOT NULL DEFAULT '',
+      sentiment_tone TEXT NOT NULL DEFAULT '',
+      emotional_impact TEXT NOT NULL DEFAULT '',
+      sentiment_score INTEGER,
+      sentiment_rationale TEXT NOT NULL DEFAULT '',
       collection_id TEXT REFERENCES memory_collections(id) ON DELETE SET NULL,
+      tags_json TEXT NOT NULL DEFAULT '[]',
       media_ids_json TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -324,6 +329,42 @@ export function initDatabase(): void {
   if (!userCols.some((c) => c.name === 'theme')) {
     db.exec("ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'midnight'");
   }
+
+  const memoryCols = db.prepare('PRAGMA table_info(memories)').all() as Array<{ name: string }>;
+  if (!memoryCols.some((c) => c.name === 'tags_json')) {
+    db.exec("ALTER TABLE memories ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'");
+    // Backfill tags_json from existing memory_tags rows
+    const rows = db
+      .prepare('SELECT memory_id, tag FROM memory_tags')
+      .all() as Array<{ memory_id: string; tag: string }>;
+    const byMemory = new Map<string, string[]>();
+    for (const r of rows) {
+      const list = byMemory.get(r.memory_id) || [];
+      if (!list.some((t) => t.toLowerCase() === r.tag.toLowerCase())) {
+        list.push(r.tag);
+      }
+      byMemory.set(r.memory_id, list);
+    }
+    const upd = db.prepare('UPDATE memories SET tags_json = ? WHERE id = ?');
+    for (const [memId, tags] of byMemory.entries()) {
+      upd.run(JSON.stringify(tags), memId);
+    }
+  }
+
+  const memoryColsAfterTags = db.prepare('PRAGMA table_info(memories)').all() as Array<{ name: string }>;
+  if (!memoryColsAfterTags.some((c) => c.name === 'sentiment_tone')) {
+    db.exec("ALTER TABLE memories ADD COLUMN sentiment_tone TEXT NOT NULL DEFAULT ''");
+  }
+  if (!memoryColsAfterTags.some((c) => c.name === 'emotional_impact')) {
+    db.exec("ALTER TABLE memories ADD COLUMN emotional_impact TEXT NOT NULL DEFAULT ''");
+  }
+  if (!memoryColsAfterTags.some((c) => c.name === 'sentiment_score')) {
+    db.exec('ALTER TABLE memories ADD COLUMN sentiment_score INTEGER');
+  }
+  if (!memoryColsAfterTags.some((c) => c.name === 'sentiment_rationale')) {
+    db.exec("ALTER TABLE memories ADD COLUMN sentiment_rationale TEXT NOT NULL DEFAULT ''");
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS idx_memories_user_impact ON memories(user_id, emotional_impact)');
 }
 
 export function newId(prefix = ''): string {

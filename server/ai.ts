@@ -273,13 +273,14 @@ export async function generateMemoryAssist(params: {
 export async function transcribeAudioBuffer(buffer: Buffer, mimeType: string): Promise<string> {
   const ai = getClient();
   const base64Audio = buffer.toString('base64');
+  const cleanMimeType = (mimeType || 'audio/webm').split(';')[0].trim() || 'audio/webm';
   const response = await ai.models.generateContent({
     model: 'gemini-3.5-transcribe',
     contents: {
       parts: [
         {
           inlineData: {
-            mimeType: mimeType || 'audio/webm',
+            mimeType: cleanMimeType,
             data: base64Audio,
           },
         },
@@ -288,4 +289,160 @@ export async function transcribeAudioBuffer(buffer: Buffer, mimeType: string): P
     },
   });
   return (response.text ?? '').trim();
+}
+
+export const EMOTIONAL_IMPACT_LEVELS = ['Uplifting', 'Calm', 'Reflective', 'Bittersweet', 'Challenging'] as const;
+export type EmotionalImpactLevel = (typeof EMOTIONAL_IMPACT_LEVELS)[number];
+
+const KNOWN_MOODS = [
+  'Joyful',
+  'Peaceful',
+  'Reflective',
+  'Grateful',
+  'Nostalgic',
+  'Hopeful',
+  'Bittersweet',
+  'Inspired',
+  'Melancholic',
+  'Tender',
+  'Anxious',
+  'Courageous',
+] as const;
+
+export interface SentimentAnalysisResult {
+  emotionalImpact: EmotionalImpactLevel;
+  tone: string;
+  suggestedMood: string;
+  valenceScore: number;
+  rationale: string;
+}
+
+function normalizeImpact(value: unknown): EmotionalImpactLevel {
+  const raw = String(value || '').trim().toLowerCase();
+  const matched = EMOTIONAL_IMPACT_LEVELS.find((lvl) => lvl.toLowerCase() === raw);
+  if (matched) return matched;
+  if (raw.includes('uplift') || raw.includes('joy') || raw.includes('happy') || raw.includes('positive')) return 'Uplifting';
+  if (raw.includes('calm') || raw.includes('peace') || raw.includes('serene')) return 'Calm';
+  if (raw.includes('bitter') || raw.includes('nostalg') || raw.includes('mixed')) return 'Bittersweet';
+  if (raw.includes('challeng') || raw.includes('sad') || raw.includes('hard') || raw.includes('heavy') || raw.includes('anxi')) return 'Challenging';
+  return 'Reflective';
+}
+
+function normalizeTone(value: unknown, fallback = 'Reflective'): string {
+  const clean = String(value || '')
+    .trim()
+    .replace(/[^a-zA-Z\s-]/g, '')
+    .slice(0, 32);
+  if (!clean) return fallback;
+  const known = KNOWN_MOODS.find((m) => m.toLowerCase() === clean.toLowerCase());
+  return known || clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
+function clampValence(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return 0;
+  return Math.max(-100, Math.min(100, Math.round(num)));
+}
+
+export async function analyzeMemorySentiment(params: {
+  title?: string;
+  content: string;
+  currentMood?: string;
+}): Promise<SentimentAnalysisResult> {
+  const ai = getClient();
+  const response = await ai.models.generateContent({
+    model: 'gemini-4-hydrogen',
+    contents: `Title: ${params.title || 'Untitled'}\nUser-selected mood: ${params.currentMood || 'Not specified'}\nMemory text:\n${params.content.slice(0, 4000)}`,
+    config: {
+      systemInstruction: [
+        'You analyze personal life memory entries to classify emotional tone and overall emotional impact.',
+        'Base your classification strictly on the provided memory title and text.',
+        'emotionalImpact MUST be exactly one of: Uplifting, Calm, Reflective, Bittersweet, Challenging.',
+        'tone should be a crisp 1-word emotional descriptor (e.g., Joyful, Grateful, Peaceful, Inspired, Hopeful, Reflective, Nostalgic, Bittersweet, Tender, Melancholic, Anxious, Courageous).',
+        'suggestedMood should be the closest matching mood label.',
+        'valenceScore must be an integer from -100 (deeply painful/heavy) through 0 (neutral/contemplative) to +100 (deeply joyful/uplifting).',
+        'rationale must be one concise, empathetic sentence citing only themes present in the text (never invent facts or give medical diagnoses).',
+      ].join('\n'),
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          emotionalImpact: { type: Type.STRING },
+          tone: { type: Type.STRING },
+          suggestedMood: { type: Type.STRING },
+          valenceScore: { type: Type.INTEGER },
+          rationale: { type: Type.STRING },
+        },
+      },
+    },
+  });
+
+  const parsed = JSON.parse((response.text ?? '{}').trim()) as Record<string, unknown>;
+  const tone = normalizeTone(parsed.tone, params.currentMood || 'Reflective');
+  return {
+    emotionalImpact: normalizeImpact(parsed.emotionalImpact),
+    tone,
+    suggestedMood: normalizeTone(parsed.suggestedMood, tone),
+    valenceScore: clampValence(parsed.valenceScore),
+    rationale: String(parsed.rationale || '').trim().slice(0, 280),
+  };
+}
+
+export async function analyzeMemoryBatchSentiment(
+  entries: Array<{ id: string; title: string; content: string; mood: string }>
+): Promise<Array<{ id: string } & SentimentAnalysisResult>> {
+  if (entries.length === 0) return [];
+  const ai = getClient();
+  const compactEntries = entries.slice(0, 15).map((e) => ({
+    id: e.id,
+    title: e.title.slice(0, 120),
+    mood: e.mood,
+    content: e.content.slice(0, 700),
+  }));
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-4-hydrogen',
+    contents: `Analyze the emotional impact and tone of each memory entry in this JSON array:\n${JSON.stringify(compactEntries)}`,
+    config: {
+      systemInstruction: [
+        'For every memory entry provided, return an object with its exact id, emotionalImpact, tone, suggestedMood, valenceScore (-100 to 100), and a 1-sentence rationale.',
+        'emotionalImpact MUST be one of: Uplifting, Calm, Reflective, Bittersweet, Challenging.',
+        'tone and suggestedMood should be single-word emotional labels (Joyful, Grateful, Peaceful, Inspired, Hopeful, Reflective, Nostalgic, Bittersweet, Tender, Melancholic, Anxious, Courageous).',
+        'Never invent facts not present in the memory text.',
+      ].join('\n'),
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.ARRAY,
+        items: {
+          type: Type.OBJECT,
+          properties: {
+            id: { type: Type.STRING },
+            emotionalImpact: { type: Type.STRING },
+            tone: { type: Type.STRING },
+            suggestedMood: { type: Type.STRING },
+            valenceScore: { type: Type.INTEGER },
+            rationale: { type: Type.STRING },
+          },
+        },
+      },
+    },
+  });
+
+  const parsed = JSON.parse((response.text ?? '[]').trim()) as Array<Record<string, unknown>>;
+  const validIds = new Set(compactEntries.map((e) => e.id));
+  const out: Array<{ id: string } & SentimentAnalysisResult> = [];
+  for (const item of Array.isArray(parsed) ? parsed : []) {
+    const id = String(item.id || '');
+    if (!validIds.has(id)) continue;
+    const tone = normalizeTone(item.tone);
+    out.push({
+      id,
+      emotionalImpact: normalizeImpact(item.emotionalImpact),
+      tone,
+      suggestedMood: normalizeTone(item.suggestedMood, tone),
+      valenceScore: clampValence(item.valenceScore),
+      rationale: String(item.rationale || '').trim().slice(0, 280),
+    });
+  }
+  return out;
 }

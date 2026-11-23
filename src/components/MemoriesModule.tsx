@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Calendar as CalendarIcon,
+  Check,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -8,12 +9,15 @@ import {
   FolderPlus,
   Heart,
   Link2,
+  Loader2,
   MapPin,
   Play,
   Plus,
   Search,
   Shuffle,
   Sparkles,
+  Tag,
+  Tags,
   Trash2,
   Users,
   X,
@@ -38,25 +42,116 @@ const DEFAULT_CATEGORIES = [
   'Important moments',
 ];
 
-const MOODS = ['Joyful', 'Peaceful', 'Reflective', 'Grateful', 'Nostalgic', 'Hopeful', 'Bittersweet', 'Inspired'];
+const MOODS = [
+  'Joyful',
+  'Grateful',
+  'Peaceful',
+  'Inspired',
+  'Hopeful',
+  'Reflective',
+  'Nostalgic',
+  'Bittersweet',
+  'Tender',
+  'Melancholic',
+  'Anxious',
+  'Courageous',
+];
+
+const EMOTIONAL_IMPACTS = [
+  {
+    id: 'Uplifting',
+    label: 'Uplifting',
+    textClass: 'text-emerald-700 dark:text-emerald-300',
+    activeClass: 'border-emerald-500/50 bg-emerald-500/15 text-emerald-800 dark:text-emerald-200 font-semibold',
+    barClass: 'bg-emerald-500 dark:bg-emerald-400',
+  },
+  {
+    id: 'Calm',
+    label: 'Calm',
+    textClass: 'text-sky-700 dark:text-sky-300',
+    activeClass: 'border-sky-500/50 bg-sky-500/15 text-sky-800 dark:text-sky-200 font-semibold',
+    barClass: 'bg-sky-500 dark:bg-sky-400',
+  },
+  {
+    id: 'Reflective',
+    label: 'Reflective',
+    textClass: 'text-indigo-700 dark:text-indigo-300',
+    activeClass: 'border-indigo-500/50 bg-indigo-500/15 text-indigo-800 dark:text-indigo-200 font-semibold',
+    barClass: 'bg-indigo-500 dark:bg-indigo-400',
+  },
+  {
+    id: 'Bittersweet',
+    label: 'Bittersweet',
+    textClass: 'text-amber-700 dark:text-amber-300',
+    activeClass: 'border-amber-500/50 bg-amber-500/15 text-amber-800 dark:text-amber-200 font-semibold',
+    barClass: 'bg-amber-500 dark:bg-amber-400',
+  },
+  {
+    id: 'Challenging',
+    label: 'Challenging',
+    textClass: 'text-rose-700 dark:text-rose-300',
+    activeClass: 'border-rose-500/50 bg-rose-500/15 text-rose-800 dark:text-rose-200 font-semibold',
+    barClass: 'bg-rose-500 dark:bg-rose-400',
+  },
+] as const;
+
+interface SentimentSummary {
+  totalMemories: number;
+  unanalyzedCount: number;
+  analyzableUnanalyzedCount: number;
+  impactCounts: Record<string, number>;
+  tones: Array<{ tone: string; count: number }>;
+}
+
+function getImpactStyle(impact: string) {
+  return (
+    EMOTIONAL_IMPACTS.find((x) => x.id.toLowerCase() === impact.toLowerCase()) || {
+      id: impact,
+      label: impact,
+      textClass: 'text-ink-secondary',
+      activeClass: 'border-hairline-strong bg-surface-raised text-ink font-semibold',
+      barClass: 'bg-sky-400',
+    }
+  );
+}
 
 export function MemoriesModule() {
-  const { focusItemId, isOnline, queueMutation, quickCaptureTarget, setQuickCaptureTarget } = useEcho();
+  const { user, focusItemId, isOnline, queueMutation, quickCaptureTarget, setQuickCaptureTarget } = useEcho();
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [collections, setCollections] = useState<MemoryCollection[]>([]);
+  const [allTagsDirectory, setAllTagsDirectory] = useState<Array<{ tag: string; count: number }>>([]);
+  const [sentimentSummary, setSentimentSummary] = useState<SentimentSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'timeline' | 'calendar' | 'collections' | 'map' | 'people'>('timeline');
+  const [view, setView] = useState<'timeline' | 'calendar' | 'collections' | 'map' | 'people' | 'tags'>('timeline');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
+  const [moodFilter, setMoodFilter] = useState('All');
+  const [impactFilter, setImpactFilter] = useState('All');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [tagFilterMode, setTagFilterMode] = useState<'any' | 'all'>('any');
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [sentimentBusy, setSentimentBusy] = useState(false);
+  const [analyzingMemoryId, setAnalyzingMemoryId] = useState<string | null>(null);
+  const [sentimentNotice, setSentimentNotice] = useState<string | null>(null);
 
   const [activeMemory, setActiveMemory] = useState<MemoryItem | null>(null);
   const [relatedMemories, setRelatedMemories] = useState<MemoryItem[]>([]);
   const [slideshowIndex, setSlideshowIndex] = useState<number | null>(null);
+  const [detailTagDraft, setDetailTagDraft] = useState('');
+
+  // Tag Manager State
+  const [tagSearch, setTagSearch] = useState('');
+  const [editingTag, setEditingTag] = useState<string | null>(null);
+  const [renameTagDraft, setRenameTagDraft] = useState('');
+  const [deletingTag, setDeletingTag] = useState<string | null>(null);
+  const [tagManagerBusy, setTagManagerBusy] = useState(false);
+  const [tagManagerNotice, setTagManagerNotice] = useState<string | null>(null);
+  const [batchAssignFilter, setBatchAssignFilter] = useState<'all' | 'untagged'>('untagged');
+  const [activeAssignTag, setActiveAssignTag] = useState('');
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -69,11 +164,17 @@ export function MemoriesModule() {
   const [mood, setMood] = useState('Reflective');
   const [category, setCategory] = useState('Important moments');
   const [customCategory, setCustomCategory] = useState('');
-  const [tagsInput, setTagsInput] = useState('');
+  const [editorTags, setEditorTags] = useState<string[]>([]);
+  const [editorTagDraft, setEditorTagDraft] = useState('');
   const [peopleInput, setPeopleInput] = useState('');
   const [collectionId, setCollectionId] = useState<string>('');
   const [aiExcluded, setAiExcluded] = useState(false);
   const [aiSummary, setAiSummary] = useState('');
+  const [sentimentTone, setSentimentTone] = useState('');
+  const [emotionalImpact, setEmotionalImpact] = useState('');
+  const [sentimentScore, setSentimentScore] = useState<number | null>(null);
+  const [sentimentRationale, setSentimentRationale] = useState('');
+  const [analyzingDraftSentiment, setAnalyzingDraftSentiment] = useState(false);
   const [attachedMedia, setAttachedMedia] = useState<MediaMeta[]>([]);
   const [aiBusy, setAiBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -88,16 +189,26 @@ export function MemoriesModule() {
       const params = new URLSearchParams();
       if (search.trim()) params.set('q', search.trim());
       if (categoryFilter !== 'All') params.set('category', categoryFilter);
+      if (moodFilter !== 'All') params.set('mood', moodFilter);
+      if (impactFilter !== 'All') params.set('impact', impactFilter);
       if (favoritesOnly) params.set('favorite', 'true');
       if (selectedCollectionId) params.set('collectionId', selectedCollectionId);
       if (selectedPerson) params.set('person', selectedPerson);
+      if (selectedTags.length > 0) {
+        params.set('tags', selectedTags.join(','));
+        params.set('tagMode', tagFilterMode);
+      }
 
-      const [memRes, colRes] = await Promise.all([
+      const [memRes, colRes, tagsRes, sentimentRes] = await Promise.all([
         apiRequest<{ memories: MemoryItem[] }>(`/memories?${params.toString()}`),
         apiRequest<{ collections: MemoryCollection[] }>('/collections'),
+        apiRequest<{ tags: Array<{ tag: string; count: number }> }>('/memories/tags'),
+        apiRequest<SentimentSummary>('/memories/sentiment-summary'),
       ]);
       setMemories(memRes.memories);
       setCollections(colRes.collections);
+      setAllTagsDirectory(tagsRes.tags);
+      setSentimentSummary(sentimentRes);
       void saveOfflineCache('memories', memRes.memories);
     } catch {
       const cached = await readOfflineCache<MemoryItem[]>('memories');
@@ -109,7 +220,7 @@ export function MemoriesModule() {
 
   useEffect(() => {
     void loadMemories();
-  }, [categoryFilter, favoritesOnly, selectedCollectionId, selectedPerson]);
+  }, [categoryFilter, moodFilter, impactFilter, favoritesOnly, selectedCollectionId, selectedPerson, selectedTags, tagFilterMode]);
 
   useEffect(() => {
     if (focusItemId && memories.length > 0) {
@@ -146,11 +257,16 @@ export function MemoriesModule() {
     setMood('Reflective');
     setCategory('Important moments');
     setCustomCategory('');
-    setTagsInput('');
+    setEditorTags([]);
+    setEditorTagDraft('');
     setPeopleInput('');
     setCollectionId('');
     setAiExcluded(false);
     setAiSummary('');
+    setSentimentTone('');
+    setEmotionalImpact('');
+    setSentimentScore(null);
+    setSentimentRationale('');
     setAttachedMedia([]);
     setError(null);
     setEditorOpen(true);
@@ -172,14 +288,36 @@ export function MemoriesModule() {
       setCategory('Custom');
       setCustomCategory(m.category);
     }
-    setTagsInput(m.tags.join(', '));
+    setEditorTags(m.tags);
+    setEditorTagDraft('');
     setPeopleInput(m.people.join(', '));
     setCollectionId(m.collectionId || '');
     setAiExcluded(m.aiExcluded);
     setAiSummary(m.aiSummary);
+    setSentimentTone(m.sentimentTone || '');
+    setEmotionalImpact(m.emotionalImpact || '');
+    setSentimentScore(m.sentimentScore ?? null);
+    setSentimentRationale(m.sentimentRationale || '');
     setAttachedMedia(m.media);
     setError(null);
     setEditorOpen(true);
+  };
+
+  const addEditorTag = (raw: string) => {
+    const clean = raw.trim().replace(/^#+/, '').slice(0, 40);
+    if (!clean) return;
+    setEditorTags((prev) =>
+      prev.some((t) => t.toLowerCase() === clean.toLowerCase()) ? prev : [...prev, clean]
+    );
+    setEditorTagDraft('');
+  };
+
+  const toggleEditorTag = (tag: string) => {
+    setEditorTags((prev) =>
+      prev.some((t) => t.toLowerCase() === tag.toLowerCase())
+        ? prev.filter((t) => t.toLowerCase() !== tag.toLowerCase())
+        : [...prev, tag]
+    );
   };
 
   const handleGenerateAiTitleSummary = async () => {
@@ -200,11 +338,91 @@ export function MemoriesModule() {
     }
   };
 
+  const handleAnalyzeDraftSentiment = async () => {
+    if (!content.trim()) return;
+    setAnalyzingDraftSentiment(true);
+    setError(null);
+    try {
+      const res = await apiRequest<{
+        tone: string;
+        suggestedMood: string;
+        emotionalImpact: string;
+        valenceScore: number;
+        rationale: string;
+      }>('/ai/analyze-sentiment', {
+        method: 'POST',
+        body: JSON.stringify({ title: title.trim(), content: content.trim(), mood }),
+      });
+      setSentimentTone(res.tone);
+      setEmotionalImpact(res.emotionalImpact);
+      setSentimentScore(res.valenceScore);
+      setSentimentRationale(res.rationale);
+      if (res.suggestedMood && MOODS.includes(res.suggestedMood)) {
+        setMood(res.suggestedMood);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Sentiment analysis unavailable.');
+    } finally {
+      setAnalyzingDraftSentiment(false);
+    }
+  };
+
+  const handleAnalyzeBatchSentiment = async () => {
+    setSentimentBusy(true);
+    setSentimentNotice(null);
+    try {
+      const res = await apiRequest<{ analyzedCount: number; memories: MemoryItem[] }>(
+        '/memories/analyze-sentiment-batch',
+        {
+          method: 'POST',
+          body: JSON.stringify({ applyMood: true }),
+        }
+      );
+      setSentimentNotice(
+        res.analyzedCount > 0
+          ? `Analyzed emotional tone & impact for ${res.analyzedCount} memory entry(s).`
+          : 'All eligible memories already have emotional impact analysis.'
+      );
+      await loadMemories();
+    } catch (err) {
+      setSentimentNotice(err instanceof Error ? err.message : 'Batch sentiment analysis failed.');
+    } finally {
+      setSentimentBusy(false);
+    }
+  };
+
+  const handleAnalyzeSingleMemory = async (memoryId: string) => {
+    setAnalyzingMemoryId(memoryId);
+    setSentimentNotice(null);
+    try {
+      const res = await apiRequest<{ memory: MemoryItem }>(`/memories/${encodeURIComponent(memoryId)}/analyze-sentiment`, {
+        method: 'POST',
+        body: JSON.stringify({ applyMood: true }),
+      });
+      setMemories((prev) => prev.map((x) => (x.id === memoryId ? res.memory : x)));
+      if (activeMemory?.id === memoryId) {
+        setActiveMemory(res.memory);
+      }
+      const summaryRes = await apiRequest<SentimentSummary>('/memories/sentiment-summary');
+      setSentimentSummary(summaryRes);
+    } catch (err) {
+      setSentimentNotice(err instanceof Error ? err.message : 'Unable to analyze memory sentiment.');
+    } finally {
+      setAnalyzingMemoryId(null);
+    }
+  };
+
   const handleSaveMemory = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSaving(true);
     const chosenCategory = category === 'Custom' && customCategory.trim() ? customCategory.trim() : category;
+    const pendingDraftTag = editorTagDraft.trim().replace(/^#+/, '').slice(0, 40);
+    const finalTags =
+      pendingDraftTag && !editorTags.some((t) => t.toLowerCase() === pendingDraftTag.toLowerCase())
+        ? [...editorTags, pendingDraftTag]
+        : editorTags;
+
     const payload = {
       title: title.trim() || 'Untitled Memory',
       content: content.trim(),
@@ -216,8 +434,13 @@ export function MemoriesModule() {
       category: chosenCategory,
       aiExcluded,
       aiSummary,
+      sentimentTone,
+      emotionalImpact,
+      sentimentScore,
+      sentimentRationale,
+      autoAnalyzeSentiment: !editingId && !aiExcluded && !emotionalImpact && Boolean(user?.aiConsent),
       collectionId: collectionId || null,
-      tags: tagsInput.split(',').map((t) => t.trim()).filter(Boolean),
+      tags: finalTags,
       people: peopleInput.split(',').map((p) => p.trim()).filter(Boolean),
       mediaIds: attachedMedia.map((m) => m.id),
     };
@@ -299,6 +522,71 @@ export function MemoriesModule() {
     await loadMemories();
   };
 
+  const toggleTagFilter = (tag: string) => {
+    setSelectedTags((prev) =>
+      prev.some((t) => t.toLowerCase() === tag.toLowerCase())
+        ? prev.filter((t) => t.toLowerCase() !== tag.toLowerCase())
+        : [...prev, tag]
+    );
+  };
+
+  const handleUpdateMemoryTags = async (memoryId: string, nextTags: string[]) => {
+    const res = await apiRequest<{ memory: MemoryItem }>(`/memories/${encodeURIComponent(memoryId)}/tags`, {
+      method: 'POST',
+      body: JSON.stringify({ tags: nextTags }),
+    });
+    setMemories((prev) => prev.map((x) => (x.id === memoryId ? res.memory : x)));
+    if (activeMemory?.id === memoryId) {
+      setActiveMemory(res.memory);
+    }
+    const tagsRes = await apiRequest<{ tags: Array<{ tag: string; count: number }> }>('/memories/tags');
+    setAllTagsDirectory(tagsRes.tags);
+  };
+
+  const handleRenameTag = async (oldTag: string) => {
+    const cleanNew = renameTagDraft.trim().replace(/^#+/, '').slice(0, 40);
+    if (!cleanNew || cleanNew.toLowerCase() === oldTag.toLowerCase()) {
+      setEditingTag(null);
+      return;
+    }
+    setTagManagerBusy(true);
+    setTagManagerNotice(null);
+    try {
+      const res = await apiRequest<{ updatedCount: number }>('/memories/tags/rename', {
+        method: 'PUT',
+        body: JSON.stringify({ oldTag, newTag: cleanNew }),
+      });
+      setSelectedTags((prev) => prev.map((t) => (t.toLowerCase() === oldTag.toLowerCase() ? cleanNew : t)));
+      if (activeAssignTag.toLowerCase() === oldTag.toLowerCase()) setActiveAssignTag(cleanNew);
+      setEditingTag(null);
+      setRenameTagDraft('');
+      setTagManagerNotice(`Renamed "#${oldTag}" to "#${cleanNew}" across ${res.updatedCount} memory entry(s).`);
+      await loadMemories();
+    } catch (err) {
+      setTagManagerNotice(err instanceof Error ? err.message : 'Unable to rename tag.');
+    } finally {
+      setTagManagerBusy(false);
+    }
+  };
+
+  const handleDeleteGlobalTag = async (tag: string) => {
+    setTagManagerBusy(true);
+    setTagManagerNotice(null);
+    try {
+      const res = await apiRequest<{ updatedCount: number }>(`/memories/tags/${encodeURIComponent(tag)}`, {
+        method: 'DELETE',
+      });
+      setSelectedTags((prev) => prev.filter((t) => t.toLowerCase() !== tag.toLowerCase()));
+      setDeletingTag(null);
+      setTagManagerNotice(`Removed "#${tag}" from ${res.updatedCount} memory entry(s).`);
+      await loadMemories();
+    } catch (err) {
+      setTagManagerNotice(err instanceof Error ? err.message : 'Unable to delete tag.');
+    } finally {
+      setTagManagerBusy(false);
+    }
+  };
+
   const peopleDirectory = useMemo(() => {
     const counts = new Map<string, number>();
     for (const m of memories) {
@@ -308,6 +596,12 @@ export function MemoriesModule() {
     }
     return [...counts.entries()].sort((a, b) => b[1] - a[1]);
   }, [memories]);
+
+  const filteredTagDirectory = useMemo(() => {
+    const q = tagSearch.trim().toLowerCase().replace(/^#+/, '');
+    if (!q) return allTagsDirectory;
+    return allTagsDirectory.filter((item) => item.tag.toLowerCase().includes(q));
+  }, [allTagsDirectory, tagSearch]);
 
   const calendarDays = useMemo(() => {
     const [yr, mo] = calendarMonth.split('-').map(Number);
@@ -390,6 +684,7 @@ export function MemoriesModule() {
             { id: 'collections', label: 'Collections' },
             { id: 'map', label: 'Memory Map' },
             { id: 'people', label: 'People' },
+            { id: 'tags', label: `Tags (${allTagsDirectory.length})` },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -426,6 +721,17 @@ export function MemoriesModule() {
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
+          <select
+            value={moodFilter}
+            onChange={(e) => setMoodFilter(e.target.value)}
+            aria-label="Filter by mood or tone"
+            className="flex-1 sm:flex-none rounded-xl border border-hairline-strong bg-surface px-3 py-2 text-xs text-ink-secondary focus:outline-none min-w-0"
+          >
+            <option value="All">All Moods & Tones</option>
+            {Array.from(new Set([...MOODS, ...(sentimentSummary?.tones.map((t) => t.tone) || [])])).map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
           <button
             type="button"
             onClick={() => setFavoritesOnly((prev) => !prev)}
@@ -448,20 +754,168 @@ export function MemoriesModule() {
         </div>
       </div>
 
-      {(selectedCollectionId || selectedPerson) && (
-        <div className="flex items-center gap-3 text-xs text-sky-700 dark:text-sky-300">
+      {/* Emotional Impact Filter & AI Sentiment Strip */}
+      {view !== 'tags' && (
+        <div className="rounded-xl border border-hairline bg-surface px-3 py-2.5 flex flex-col xl:flex-row xl:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+            <span className="text-[11px] font-medium text-ink-muted whitespace-nowrap shrink-0 mr-1">
+              Emotional Impact:
+            </span>
+            <button
+              type="button"
+              onClick={() => setImpactFilter('All')}
+              className={`touch-manipulation inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors whitespace-nowrap shrink-0 min-h-[36px] ${
+                impactFilter === 'All'
+                  ? 'border-sky-400 bg-sky-400/15 text-sky-800 dark:text-sky-200 font-semibold'
+                  : 'border-hairline bg-inset text-ink-secondary hover:text-ink'
+              }`}
+            >
+              <span>All</span>
+              {sentimentSummary && (
+                <span className="font-mono text-[11px] text-ink-muted tabular-nums">
+                  {sentimentSummary.totalMemories}
+                </span>
+              )}
+            </button>
+            {EMOTIONAL_IMPACTS.map((imp) => {
+              const count = sentimentSummary?.impactCounts?.[imp.id] || 0;
+              const active = impactFilter.toLowerCase() === imp.id.toLowerCase();
+              return (
+                <button
+                  key={imp.id}
+                  type="button"
+                  onClick={() => setImpactFilter(active ? 'All' : imp.id)}
+                  className={`touch-manipulation inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs transition-colors whitespace-nowrap shrink-0 min-h-[36px] ${
+                    active
+                      ? imp.activeClass
+                      : 'border-hairline bg-inset text-ink-secondary hover:text-ink hover:border-hairline-strong'
+                  }`}
+                >
+                  <span className={active ? '' : imp.textClass}>{imp.label}</span>
+                  <span className="font-mono text-[11px] text-ink-muted tabular-nums">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between xl:justify-end gap-2.5 shrink-0">
+            {sentimentSummary && sentimentSummary.analyzableUnanalyzedCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => void handleAnalyzeBatchSentiment()}
+                disabled={sentimentBusy || !user?.aiConsent}
+                title={
+                  user?.aiConsent
+                    ? 'Run AI sentiment analysis on uncategorized memories'
+                    : 'Enable ECHO AI in Profile privacy settings to analyze sentiment'
+                }
+                className="touch-manipulation inline-flex items-center gap-1.5 rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-3 py-1.5 text-xs font-medium text-cyan-800 dark:text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-45 whitespace-nowrap shrink-0 min-h-[36px]"
+              >
+                {sentimentBusy ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Sparkles className="w-3.5 h-3.5" />
+                )}
+                {sentimentBusy
+                  ? 'Analyzing Tone...'
+                  : `Analyze Sentiment (${Math.min(sentimentSummary.analyzableUnanalyzedCount, 15)})`}
+              </button>
+            ) : (
+              sentimentSummary &&
+              sentimentSummary.totalMemories > 0 && (
+                <span className="text-[11px] text-ink-muted whitespace-nowrap">
+                  {sentimentSummary.unanalyzedCount === 0
+                    ? 'All memories analyzed'
+                    : `${sentimentSummary.unanalyzedCount} excluded from AI`}
+                </span>
+              )
+            )}
+          </div>
+        </div>
+      )}
+
+      {sentimentNotice && (
+        <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 px-3.5 py-2 text-xs text-cyan-900 dark:text-cyan-100 flex items-center justify-between gap-2">
+          <span>{sentimentNotice}</span>
+          <button type="button" onClick={() => setSentimentNotice(null)} className="shrink-0 hover:opacity-80">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Quick Tag Filter Strip */}
+      {allTagsDirectory.length > 0 && view !== 'tags' && (
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+          <span className="inline-flex items-center gap-1 text-[11px] font-medium text-ink-muted shrink-0">
+            <Tag className="w-3 h-3 text-sky-500 dark:text-sky-400" />
+            Tags:
+          </span>
+          {allTagsDirectory.slice(0, 14).map((item) => {
+            const active = selectedTags.some((t) => t.toLowerCase() === item.tag.toLowerCase());
+            return (
+              <button
+                key={item.tag}
+                type="button"
+                onClick={() => toggleTagFilter(item.tag)}
+                className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
+                  active
+                    ? 'border-sky-400 bg-sky-400/20 text-sky-800 dark:text-sky-200 font-semibold'
+                    : 'border-hairline bg-surface text-ink-secondary hover:border-hairline-strong hover:text-ink'
+                }`}
+              >
+                <span>#{item.tag}</span>
+                <span className="font-mono text-[10px] text-ink-muted tabular-nums">{item.count}</span>
+              </button>
+            );
+          })}
+          {selectedTags.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setTagFilterMode((m) => (m === 'any' ? 'all' : 'any'))}
+              className="rounded-lg border border-hairline-strong bg-inset px-2.5 py-1 text-[11px] font-mono text-sky-700 dark:text-sky-300 whitespace-nowrap shrink-0"
+              title="Toggle whether memories must match ANY or ALL selected tags"
+            >
+              Match: {tagFilterMode.toUpperCase()}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setView('tags')}
+            className="rounded-lg border border-hairline-strong bg-tint px-2.5 py-1 text-[11px] font-medium text-ink-secondary hover:text-ink whitespace-nowrap shrink-0"
+          >
+            Manage Tags
+          </button>
+        </div>
+      )}
+
+      {(selectedCollectionId || selectedPerson || selectedTags.length > 0 || impactFilter !== 'All' || moodFilter !== 'All') && (
+        <div className="flex flex-wrap items-center gap-3 text-xs text-sky-700 dark:text-sky-300">
           <span>
-            Filtered by {selectedPerson ? `Person: ${selectedPerson}` : 'Collection'}
+            Filtered by{' '}
+            {[
+              impactFilter !== 'All' ? `Impact: ${impactFilter}` : null,
+              moodFilter !== 'All' ? `Tone: ${moodFilter}` : null,
+              selectedPerson ? `Person: ${selectedPerson}` : null,
+              selectedCollectionId ? 'Collection' : null,
+              selectedTags.length > 0
+                ? `Tags (${tagFilterMode === 'all' ? 'all' : 'any'}): ${selectedTags.map((t) => `#${t}`).join(', ')}`
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · ')}
           </span>
           <button
             type="button"
             onClick={() => {
+              setImpactFilter('All');
+              setMoodFilter('All');
               setSelectedCollectionId(null);
               setSelectedPerson(null);
+              setSelectedTags([]);
             }}
             className="underline hover:text-ink"
           >
-            Clear filter
+            Clear filters
           </button>
         </div>
       )}
@@ -503,8 +957,28 @@ export function MemoriesModule() {
                     }`}
                   >
                     <div className="flex items-start justify-between gap-3">
-                      <div className="text-xs text-ink-muted font-mono tabular-nums">
-                        {m.memoryDate} · {m.category} · {m.mood}
+                      <div className="text-xs text-ink-muted font-mono tabular-nums flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                        <span>{m.memoryDate}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{m.category}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{m.sentimentTone || m.mood}</span>
+                        {m.emotionalImpact && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setImpactFilter(m.emotionalImpact);
+                              }}
+                              className={`font-sans font-semibold hover:underline ${getImpactStyle(m.emotionalImpact).textClass}`}
+                              title={`Filter by ${m.emotionalImpact} impact`}
+                            >
+                              {m.emotionalImpact}
+                            </button>
+                          </>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -513,7 +987,7 @@ export function MemoriesModule() {
                           void handleToggleFavorite(m);
                         }}
                         aria-label="Toggle favorite"
-                        className="text-ink-muted hover:text-rose-600 dark:hover:text-rose-300 p-1"
+                        className="text-ink-muted hover:text-rose-600 dark:hover:text-rose-300 p-1 shrink-0"
                       >
                         <Heart className={`w-4 h-4 ${m.isFavorite ? 'fill-rose-400 text-rose-400' : ''}`} />
                       </button>
@@ -527,7 +1001,23 @@ export function MemoriesModule() {
                         </span>
                       )}
                       {m.people.length > 0 && <span>With: {m.people.join(', ')}</span>}
-                      {m.tags.length > 0 && <span className="text-sky-700 dark:text-sky-300/80">#{m.tags.join(' #')}</span>}
+                      {m.tags.length > 0 && (
+                        <span className="inline-flex flex-wrap gap-1.5">
+                          {m.tags.map((t) => (
+                            <button
+                              key={t}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleTagFilter(t);
+                              }}
+                              className="rounded-md border border-hairline bg-inset px-1.5 py-0.5 text-[11px] text-sky-700 dark:text-sky-300 hover:border-sky-400/50"
+                            >
+                              #{t}
+                            </button>
+                          ))}
+                        </span>
+                      )}
                       {m.media.length > 0 && <span>{m.media.length} attachment(s)</span>}
                     </div>
                   </article>
@@ -542,7 +1032,7 @@ export function MemoriesModule() {
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-xs text-sky-700 dark:text-sky-300 font-mono tabular-nums">
-                    {activeMemory.memoryDate} · {activeMemory.category} · {activeMemory.mood}
+                    {activeMemory.memoryDate} · {activeMemory.category} · {activeMemory.sentimentTone || activeMemory.mood}
                   </div>
                   <h2 className="font-display text-2xl font-bold text-ink mt-1">{activeMemory.title}</h2>
                 </div>
@@ -562,6 +1052,68 @@ export function MemoriesModule() {
                 </div>
               )}
 
+              {/* AI Sentiment & Emotional Impact Insight */}
+              <div className="rounded-xl border border-hairline bg-inset p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-xs font-semibold text-ink-secondary">Emotional Impact & Tone</div>
+                  <button
+                    type="button"
+                    onClick={() => void handleAnalyzeSingleMemory(activeMemory.id)}
+                    disabled={analyzingMemoryId === activeMemory.id || !user?.aiConsent}
+                    className="touch-manipulation inline-flex items-center gap-1 rounded-lg border border-cyan-500/35 bg-cyan-500/10 px-2.5 py-1 text-[11px] font-medium text-cyan-800 dark:text-cyan-200 hover:bg-cyan-500/20 disabled:opacity-45"
+                  >
+                    {analyzingMemoryId === activeMemory.id ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3 h-3" />
+                    )}
+                    {analyzingMemoryId === activeMemory.id
+                      ? 'Analyzing...'
+                      : activeMemory.emotionalImpact
+                        ? 'Re-analyze'
+                        : 'Analyze Tone'}
+                  </button>
+                </div>
+
+                {activeMemory.emotionalImpact ? (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className={`font-semibold ${getImpactStyle(activeMemory.emotionalImpact).textClass}`}>
+                          {activeMemory.emotionalImpact}
+                        </span>
+                        <span className="text-ink-muted" aria-hidden="true">·</span>
+                        <span className="text-ink font-medium">{activeMemory.sentimentTone || activeMemory.mood}</span>
+                      </div>
+                      {activeMemory.sentimentScore !== null && (
+                        <span className="font-mono text-[11px] text-ink-muted tabular-nums">
+                          Valence {activeMemory.sentimentScore > 0 ? `+${activeMemory.sentimentScore}` : activeMemory.sentimentScore}
+                        </span>
+                      )}
+                    </div>
+
+                    {activeMemory.sentimentScore !== null && (
+                      <div className="h-1.5 w-full rounded-full bg-tint overflow-hidden" aria-label="Emotional valence bar">
+                        <div
+                          className={`h-full rounded-full transition-all ${getImpactStyle(activeMemory.emotionalImpact).barClass}`}
+                          style={{
+                            width: `${Math.max(8, Math.min(100, Math.round((activeMemory.sentimentScore + 100) / 2)))}%`,
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {activeMemory.sentimentRationale && (
+                      <p className="text-xs text-ink-muted leading-relaxed">{activeMemory.sentimentRationale}</p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-ink-muted">
+                    Not yet analyzed. Run AI sentiment analysis to classify emotional impact and tone.
+                  </p>
+                )}
+              </div>
+
               <p className="text-sm text-ink-secondary leading-relaxed whitespace-pre-wrap">{activeMemory.content}</p>
 
               {activeMemory.media.length > 0 && (
@@ -577,10 +1129,71 @@ export function MemoriesModule() {
                 </div>
               )}
 
-              <div className="space-y-1.5 text-xs text-ink-muted border-t border-hairline pt-4">
+              <div className="space-y-2.5 text-xs text-ink-muted border-t border-hairline pt-4">
                 {activeMemory.locationName && <div>Location: {activeMemory.locationName}</div>}
                 {activeMemory.people.length > 0 && <div>People: {activeMemory.people.join(', ')}</div>}
-                {activeMemory.tags.length > 0 && <div>Tags: {activeMemory.tags.join(', ')}</div>}
+                <div className="space-y-2">
+                  <div className="font-medium text-ink-secondary">Tags</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {activeMemory.tags.length === 0 ? (
+                      <span className="text-ink-muted">No tags assigned yet</span>
+                    ) : (
+                      activeMemory.tags.map((t) => (
+                        <span
+                          key={t}
+                          className="inline-flex items-center gap-1 rounded-lg border border-hairline-strong bg-inset px-2 py-1 text-xs text-sky-700 dark:text-sky-300"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleTagFilter(t)}
+                            className="hover:underline"
+                            title="Filter timeline by this tag"
+                          >
+                            #{t}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              void handleUpdateMemoryTags(
+                                activeMemory.id,
+                                activeMemory.tags.filter((x) => x !== t)
+                              )
+                            }
+                            aria-label={`Remove tag ${t}`}
+                            className="text-ink-muted hover:text-rose-500"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </span>
+                      ))
+                    )}
+                  </div>
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const clean = detailTagDraft.trim().replace(/^#+/, '').slice(0, 40);
+                      if (!clean) return;
+                      setDetailTagDraft('');
+                      void handleUpdateMemoryTags(activeMemory.id, [...activeMemory.tags, clean]);
+                    }}
+                    className="flex items-center gap-2 pt-1"
+                  >
+                    <input
+                      type="text"
+                      value={detailTagDraft}
+                      onChange={(e) => setDetailTagDraft(e.target.value)}
+                      placeholder="Add tag..."
+                      className="flex-1 min-w-0 rounded-lg border border-hairline-strong bg-inset px-2.5 py-1.5 text-xs text-ink placeholder:text-ink-muted focus:outline-none focus:border-sky-400"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!detailTagDraft.trim()}
+                      className="rounded-lg border border-hairline-strong bg-tint px-2.5 py-1.5 text-xs font-medium text-ink hover:bg-tint-hover disabled:opacity-40"
+                    >
+                      Add
+                    </button>
+                  </form>
+                </div>
                 <div>AI Access: {activeMemory.aiExcluded ? 'Excluded from AI' : 'Accessible to ECHO AI'}</div>
               </div>
 
@@ -848,6 +1461,343 @@ export function MemoriesModule() {
         </div>
       )}
 
+      {/* VIEW: TAG MANAGER */}
+      {view === 'tags' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-w-0">
+          {/* Left: Global Tag Directory (Rename / Merge / Delete / Filter) */}
+          <div className="lg:col-span-7 rounded-2xl border border-hairline bg-surface p-5 sm:p-6 space-y-5 min-w-0">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="font-display text-lg font-semibold text-ink inline-flex items-center gap-2">
+                  <Tags className="w-4 h-4 text-sky-500 dark:text-sky-400" /> Tag Manager
+                </h2>
+                <p className="text-xs text-ink-muted">
+                  Rename, merge, delete, or multi-select tags to filter your memory archive.
+                </p>
+              </div>
+              {selectedTags.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setView('timeline')}
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-sky-400 px-3.5 py-2 text-xs font-semibold text-slate-950 hover:bg-sky-300 whitespace-nowrap shrink-0"
+                >
+                  View {selectedTags.length} Selected in Timeline
+                </button>
+              )}
+            </div>
+
+            {tagManagerNotice && (
+              <div className="rounded-xl border border-sky-500/30 bg-sky-500/10 px-3.5 py-2.5 text-xs text-sky-800 dark:text-sky-200 flex items-center justify-between gap-2">
+                <span>{tagManagerNotice}</span>
+                <button type="button" onClick={() => setTagManagerNotice(null)} className="shrink-0">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative flex-1 min-w-[180px]">
+                <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={tagSearch}
+                  onChange={(e) => setTagSearch(e.target.value)}
+                  placeholder="Filter tags..."
+                  className="w-full rounded-xl border border-hairline-strong bg-inset pl-8 pr-3 py-2 text-xs text-ink placeholder:text-ink-muted focus:outline-none focus:border-sky-400"
+                />
+              </div>
+              {selectedTags.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedTags([])}
+                  className="rounded-xl border border-hairline-strong bg-inset px-3 py-2 text-xs text-ink-secondary hover:text-ink"
+                >
+                  Clear selection ({selectedTags.length})
+                </button>
+              )}
+            </div>
+
+            {filteredTagDirectory.length === 0 ? (
+              <div className="rounded-xl border border-hairline bg-inset p-6 text-center text-xs text-ink-muted">
+                {allTagsDirectory.length === 0
+                  ? 'No tags yet. Assign tags on any memory card or use the Categorize panel on the right.'
+                  : 'No tags match your search.'}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredTagDirectory.map((item) => {
+                  const isSelected = selectedTags.some((t) => t.toLowerCase() === item.tag.toLowerCase());
+                  const isEditing = editingTag === item.tag;
+                  const isDeleting = deletingTag === item.tag;
+                  return (
+                    <div
+                      key={item.tag}
+                      className={`rounded-xl border p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 transition-colors ${
+                        isSelected
+                          ? 'border-sky-400/60 bg-surface-raised'
+                          : 'border-hairline bg-inset hover:border-hairline-strong'
+                      }`}
+                    >
+                      {isEditing ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            void handleRenameTag(item.tag);
+                          }}
+                          className="flex-1 flex items-center gap-2 min-w-0"
+                        >
+                          <input
+                            type="text"
+                            autoFocus
+                            value={renameTagDraft}
+                            onChange={(e) => setRenameTagDraft(e.target.value)}
+                            placeholder="New tag name..."
+                            className="flex-1 min-w-0 rounded-lg border border-sky-400/50 bg-surface px-2.5 py-1.5 text-xs text-ink focus:outline-none"
+                          />
+                          <button
+                            type="submit"
+                            disabled={tagManagerBusy}
+                            className="inline-flex items-center gap-1 rounded-lg bg-sky-400 px-2.5 py-1.5 text-xs font-semibold text-slate-950"
+                          >
+                            <Check className="w-3.5 h-3.5" /> Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingTag(null)}
+                            className="rounded-lg border border-hairline-strong px-2.5 py-1.5 text-xs text-ink-secondary"
+                          >
+                            Cancel
+                          </button>
+                        </form>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => toggleTagFilter(item.tag)}
+                            className="flex items-center gap-2.5 text-left min-w-0 flex-1"
+                          >
+                            <span
+                              className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                                isSelected
+                                  ? 'border-sky-400 bg-sky-400 text-slate-950'
+                                  : 'border-hairline-strong bg-surface'
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3 h-3" />}
+                            </span>
+                            <span className="text-sm font-medium text-ink truncate">#{item.tag}</span>
+                            <span className="text-xs font-mono text-ink-muted tabular-nums shrink-0">
+                              {item.count} {item.count === 1 ? 'memory' : 'memories'}
+                            </span>
+                          </button>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedTags([item.tag]);
+                                setView('timeline');
+                              }}
+                              className="rounded-lg border border-hairline-strong bg-surface px-2.5 py-1 text-[11px] font-medium text-sky-700 dark:text-sky-300 hover:bg-tint-hover"
+                            >
+                              Filter
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingTag(item.tag);
+                                setRenameTagDraft(item.tag);
+                                setDeletingTag(null);
+                              }}
+                              aria-label={`Rename ${item.tag}`}
+                              className="rounded-lg border border-hairline-strong bg-surface p-1.5 text-ink-secondary hover:text-ink"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            {isDeleting ? (
+                              <div className="inline-flex items-center gap-1">
+                                <button
+                                  type="button"
+                                  disabled={tagManagerBusy}
+                                  onClick={() => void handleDeleteGlobalTag(item.tag)}
+                                  className="rounded-lg bg-rose-500 px-2 py-1 text-[11px] font-semibold text-white"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeletingTag(null)}
+                                  className="rounded-lg border border-hairline-strong px-2 py-1 text-[11px] text-ink-secondary"
+                                >
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDeletingTag(item.tag);
+                                  setEditingTag(null);
+                                }}
+                                aria-label={`Delete ${item.tag}`}
+                                className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-1.5 text-rose-700 dark:text-rose-200 hover:bg-rose-500/20"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Right: Batch Categorize & Tag Individual Entries */}
+          <div className="lg:col-span-5 rounded-2xl border border-hairline bg-surface p-5 sm:p-6 space-y-4 h-fit min-w-0">
+            <div className="space-y-1">
+              <h3 className="font-display text-base font-semibold text-ink">Categorize Entries</h3>
+              <p className="text-xs text-ink-muted">
+                Choose or type an active tag, then click any memory below to toggle that tag on or off.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs text-ink-muted block">Active Tag to Apply</label>
+              <input
+                type="text"
+                value={activeAssignTag}
+                onChange={(e) => setActiveAssignTag(e.target.value)}
+                placeholder="Type a tag name (e.g. family-trip)"
+                className="w-full rounded-xl border border-hairline-strong bg-inset px-3 py-2 text-xs text-ink placeholder:text-ink-muted focus:outline-none focus:border-sky-400"
+              />
+              {allTagsDirectory.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {allTagsDirectory.slice(0, 10).map((t) => {
+                    const isPicked = activeAssignTag.trim().toLowerCase() === t.tag.toLowerCase();
+                    return (
+                      <button
+                        key={t.tag}
+                        type="button"
+                        onClick={() => setActiveAssignTag(t.tag)}
+                        className={`rounded-lg border px-2 py-1 text-[11px] font-medium transition-colors ${
+                          isPicked
+                            ? 'border-sky-400 bg-sky-400 text-slate-950 font-semibold'
+                            : 'border-hairline bg-inset text-ink-secondary hover:text-ink'
+                        }`}
+                      >
+                        #{t.tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between border-t border-hairline pt-3">
+              <span className="text-xs font-medium text-ink-secondary">Memories</span>
+              <div className="inline-flex rounded-lg border border-hairline bg-inset p-0.5 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => setBatchAssignFilter('untagged')}
+                  className={`px-2.5 py-1 rounded-md ${
+                    batchAssignFilter === 'untagged' ? 'bg-sky-400 text-slate-950 font-semibold' : 'text-ink-muted'
+                  }`}
+                >
+                  Untagged ({memories.filter((m) => m.tags.length === 0).length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBatchAssignFilter('all')}
+                  className={`px-2.5 py-1 rounded-md ${
+                    batchAssignFilter === 'all' ? 'bg-sky-400 text-slate-950 font-semibold' : 'text-ink-muted'
+                  }`}
+                >
+                  All ({memories.length})
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+              {memories
+                .filter((m) => (batchAssignFilter === 'untagged' ? m.tags.length === 0 : true))
+                .map((m) => {
+                  const cleanAssign = activeAssignTag.trim().replace(/^#+/, '').slice(0, 40);
+                  const hasActiveTag = cleanAssign
+                    ? m.tags.some((t) => t.toLowerCase() === cleanAssign.toLowerCase())
+                    : false;
+                  return (
+                    <div
+                      key={m.id}
+                      className="rounded-xl border border-hairline bg-inset p-3 space-y-2"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold text-ink truncate">{m.title}</div>
+                          <div className="text-[11px] font-mono text-ink-muted tabular-nums">
+                            {m.memoryDate} · {m.category}
+                          </div>
+                        </div>
+                        {cleanAssign && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextTags = hasActiveTag
+                                ? m.tags.filter((t) => t.toLowerCase() !== cleanAssign.toLowerCase())
+                                : [...m.tags, cleanAssign];
+                              void handleUpdateMemoryTags(m.id, nextTags);
+                            }}
+                            className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold shrink-0 transition-colors ${
+                              hasActiveTag
+                                ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-700 dark:text-emerald-200'
+                                : 'bg-sky-400 text-slate-950 hover:bg-sky-300'
+                            }`}
+                          >
+                            {hasActiveTag ? `✓ #${cleanAssign}` : `+ #${cleanAssign}`}
+                          </button>
+                        )}
+                      </div>
+                      {m.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {m.tags.map((t) => (
+                            <span
+                              key={t}
+                              className="inline-flex items-center gap-1 rounded-md border border-hairline bg-surface px-1.5 py-0.5 text-[10px] text-sky-700 dark:text-sky-300"
+                            >
+                              #{t}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void handleUpdateMemoryTags(
+                                    m.id,
+                                    m.tags.filter((x) => x !== t)
+                                  )
+                                }
+                                className="text-ink-muted hover:text-rose-500"
+                              >
+                                <X className="w-2.5 h-2.5" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              {memories.filter((m) => (batchAssignFilter === 'untagged' ? m.tags.length === 0 : true)).length === 0 && (
+                <p className="text-xs text-ink-muted text-center py-6">
+                  {batchAssignFilter === 'untagged'
+                    ? 'Every visible memory already has at least one tag.'
+                    : 'No memories match your current view.'}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* FULLSCREEN SLIDESHOW MODAL (dark cinema mode across themes) */}
       {slideshowIndex !== null && memories[slideshowIndex] && (
         <div className="fixed inset-0 z-50 bg-[#050811]/95 backdrop-blur-lg flex flex-col justify-between p-6 sm:p-10">
@@ -936,11 +1886,24 @@ export function MemoriesModule() {
                 <button
                   type="button"
                   onClick={handleGenerateAiTitleSummary}
-                  disabled={aiBusy || !content.trim()}
+                  disabled={aiBusy || !content.trim() || !user?.aiConsent}
                   className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-cyan-400/35 bg-cyan-400/10 px-3 py-2.5 text-xs font-medium text-cyan-800 dark:text-cyan-200 hover:bg-cyan-400/20 disabled:opacity-40 whitespace-nowrap shrink-0"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
                   {aiBusy ? 'Thinking...' : 'AI Title & Summary'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleAnalyzeDraftSentiment()}
+                  disabled={analyzingDraftSentiment || !content.trim() || !user?.aiConsent}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-sky-400/35 bg-sky-400/10 px-3 py-2.5 text-xs font-medium text-sky-800 dark:text-sky-200 hover:bg-sky-400/20 disabled:opacity-40 whitespace-nowrap shrink-0"
+                >
+                  {analyzingDraftSentiment ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5" />
+                  )}
+                  {analyzingDraftSentiment ? 'Detecting...' : 'AI Mood & Tone'}
                 </button>
               </div>
 
@@ -958,6 +1921,26 @@ export function MemoriesModule() {
               {aiSummary && (
                 <div className="sm:col-span-2 rounded-xl border border-cyan-500/25 bg-cyan-500/10 px-3.5 py-2.5 text-xs text-cyan-900 dark:text-cyan-100">
                   AI Summary: {aiSummary}
+                </div>
+              )}
+
+              {emotionalImpact && (
+                <div className="sm:col-span-2 rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-xs space-y-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`font-semibold ${getImpactStyle(emotionalImpact).textClass}`}>
+                        {emotionalImpact}
+                      </span>
+                      <span className="text-ink-muted" aria-hidden="true">·</span>
+                      <span className="text-ink font-medium">{sentimentTone || mood}</span>
+                    </div>
+                    {sentimentScore !== null && (
+                      <span className="font-mono text-[11px] text-ink-muted tabular-nums">
+                        Valence {sentimentScore > 0 ? `+${sentimentScore}` : sentimentScore}
+                      </span>
+                    )}
+                  </div>
+                  {sentimentRationale && <p className="text-ink-muted">{sentimentRationale}</p>}
                 </div>
               )}
 
@@ -1072,15 +2055,82 @@ export function MemoriesModule() {
                 />
               </div>
 
-              <div>
-                <label className="text-xs text-ink-muted block mb-1">Tags (comma-separated)</label>
-                <input
-                  type="text"
-                  value={tagsInput}
-                  onChange={(e) => setTagsInput(e.target.value)}
-                  placeholder="Tags separated by commas"
-                  className="w-full rounded-xl border border-hairline-strong bg-inset px-3 py-2 text-sm text-ink"
-                />
+              <div className="sm:col-span-2 space-y-2">
+                <label className="text-xs text-ink-muted block">Tags</label>
+                {editorTags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {editorTags.map((t) => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center gap-1 rounded-lg border border-sky-400/40 bg-sky-500/10 px-2.5 py-1 text-xs font-medium text-sky-800 dark:text-sky-200"
+                      >
+                        #{t}
+                        <button
+                          type="button"
+                          onClick={() => toggleEditorTag(t)}
+                          aria-label={`Remove ${t}`}
+                          className="text-ink-muted hover:text-rose-500"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={editorTagDraft}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val.endsWith(',')) {
+                        addEditorTag(val.slice(0, -1));
+                      } else {
+                        setEditorTagDraft(val);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        addEditorTag(editorTagDraft);
+                      }
+                    }}
+                    placeholder="Type a tag and press Enter or comma..."
+                    className="flex-1 min-w-0 rounded-xl border border-hairline-strong bg-inset px-3 py-2 text-sm text-ink"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => addEditorTag(editorTagDraft)}
+                    disabled={!editorTagDraft.trim()}
+                    className="rounded-xl border border-hairline-strong bg-tint px-3.5 py-2 text-xs font-medium text-ink hover:bg-tint-hover disabled:opacity-40"
+                  >
+                    Add Tag
+                  </button>
+                </div>
+
+                {allTagsDirectory.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <span className="text-[11px] text-ink-muted">Existing tags:</span>
+                    {allTagsDirectory.slice(0, 12).map((item) => {
+                      const selected = editorTags.some((t) => t.toLowerCase() === item.tag.toLowerCase());
+                      return (
+                        <button
+                          key={item.tag}
+                          type="button"
+                          onClick={() => toggleEditorTag(item.tag)}
+                          className={`rounded-md border px-2 py-0.5 text-[11px] transition-colors ${
+                            selected
+                              ? 'border-sky-400 bg-sky-400/20 text-sky-800 dark:text-sky-200 font-semibold'
+                              : 'border-hairline bg-inset text-ink-secondary hover:text-ink'
+                          }`}
+                        >
+                          {selected ? `✓ #${item.tag}` : `+ #${item.tag}`}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
 

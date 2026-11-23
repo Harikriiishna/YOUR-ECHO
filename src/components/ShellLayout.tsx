@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ArrowLeft,
   Bell,
   BookOpen,
   Check,
@@ -62,6 +63,8 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
     setTheme,
     activeModule,
     navigateTo,
+    canGoBack,
+    goBack,
     notifications,
     unreadCount,
     markNotificationRead,
@@ -246,14 +249,24 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
       {/* Main Content Area */}
       <div className="flex-1 min-w-0 w-full lg:pl-64 flex flex-col min-h-screen">
         {/* Sticky Top Bar (compact <= 56px on mobile, 3-zone contract) */}
-        <header className="sticky top-0 z-30 h-14 w-full bg-shell border-b border-hairline px-3 sm:px-6 flex items-center justify-between gap-2.5 sm:gap-4">
+        <header className="sticky top-0 z-30 h-14 w-full bg-shell border-b border-hairline px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
           <div className="flex items-center gap-2 min-w-0 shrink-0">
             <button
               type="button"
-              onClick={() => navigateTo('home')}
-              className="touch-manipulation lg:hidden font-display text-base font-bold text-ink whitespace-nowrap shrink-0"
+              onClick={goBack}
+              disabled={!canGoBack}
+              aria-label="Go back"
+              title={canGoBack ? 'Go back to previous tab' : 'Home tab'}
+              className="touch-manipulation inline-flex items-center justify-center w-9 h-9 rounded-xl border border-hairline-strong bg-surface text-ink-secondary hover:text-ink hover:bg-tint-hover disabled:opacity-35 disabled:pointer-events-none shrink-0 transition-colors"
             >
-              ECHO
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateTo('home')}
+              className="touch-manipulation lg:hidden font-display text-sm sm:text-base font-bold text-ink truncate max-w-[108px] sm:max-w-[180px]"
+            >
+              {activeModule === 'home' ? 'ECHO' : currentLabel}
             </button>
             <span className="hidden lg:inline font-display text-sm font-semibold text-ink truncate">
               {currentLabel}

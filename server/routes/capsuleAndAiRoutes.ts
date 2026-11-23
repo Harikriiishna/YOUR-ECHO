@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Router } from 'express';
-import { generateMemoryAssist, runMemoryAiQuery, transcribeAudioBuffer } from '../ai.ts';
+import { analyzeMemorySentiment, generateMemoryAssist, runMemoryAiQuery, transcribeAudioBuffer } from '../ai.ts';
 import { type AuthenticatedRequest, rateLimit, requireAuth } from '../auth.ts';
 import { db, newId, UPLOADS_DIR } from '../db.ts';
 import { pushNotification } from '../ws.ts';
@@ -396,3 +396,31 @@ capsuleAndAiRouter.post('/ai/transcribe', requireAuth, rateLimit('ai', 15, 60_00
     res.status(502).json({ error: message });
   }
 });
+
+capsuleAndAiRouter.post(
+  '/ai/analyze-sentiment',
+  requireAuth,
+  rateLimit('ai', 25, 60_000),
+  async (req: AuthenticatedRequest, res) => {
+    if (!req.authUser!.aiConsent) {
+      res.status(403).json({ error: 'AI features are disabled in your privacy settings.' });
+      return;
+    }
+    const { title, content, mood } = req.body as { title?: string; content?: string; mood?: string };
+    if (!content || !content.trim()) {
+      res.status(400).json({ error: 'Memory content is required for sentiment analysis.' });
+      return;
+    }
+    try {
+      const result = await analyzeMemorySentiment({
+        title: title?.slice(0, 160),
+        content: content.slice(0, 4000),
+        currentMood: mood?.slice(0, 40),
+      });
+      res.json(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Sentiment analysis failed.';
+      res.status(502).json({ error: message });
+    }
+  }
+);

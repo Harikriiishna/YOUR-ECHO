@@ -52,6 +52,10 @@ export interface MemoryItem {
   isFavorite: boolean;
   aiExcluded: boolean;
   aiSummary: string;
+  sentimentTone: string;
+  emotionalImpact: string;
+  sentimentScore: number | null;
+  sentimentRationale: string;
   collectionId: string | null;
   tags: string[];
   people: string[];
