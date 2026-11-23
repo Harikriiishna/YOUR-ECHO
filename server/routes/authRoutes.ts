@@ -19,9 +19,18 @@ import { pushNotification } from '../ws.ts';
 
 export const authRouter = Router();
 
-const ALLOWED_THEMES = new Set(['midnight', 'glass', 'crystal', 'aurora', 'amber', 'violet']);
+const ALLOWED_THEMES = new Set([
+  'social',
+  'social-dark',
+  'midnight',
+  'glass',
+  'crystal',
+  'aurora',
+  'amber',
+  'violet',
+]);
 
-function sanitizeTheme(value: unknown, fallback = 'midnight'): string {
+function sanitizeTheme(value: unknown, fallback = 'social'): string {
   return typeof value === 'string' && ALLOWED_THEMES.has(value) ? value : fallback;
 }
 
@@ -76,7 +85,7 @@ authRouter.post('/auth/register', rateLimit('auth', 20, 60_000), (req, res) => {
   const now = new Date().toISOString();
   const pwHash = hashPassword(password);
   const tz = typeof timezone === 'string' && timezone.length <= 60 ? timezone : 'UTC';
-  const cleanTheme = sanitizeTheme(theme, 'midnight');
+  const cleanTheme = sanitizeTheme(theme, 'social');
 
   db.transaction(() => {
     db.prepare(`
@@ -347,6 +356,8 @@ authRouter.get('/dashboard', requireAuth, (req: AuthenticatedRequest, res) => {
   const userId = req.authUser!.id;
   const nowIso = new Date().toISOString();
   const monthDay = nowIso.slice(5, 10);
+  const rawLocalDate = typeof req.query.localDate === 'string' ? req.query.localDate.trim() : '';
+  const localDate = /^\d{4}-\d{2}-\d{2}$/.test(rawLocalDate) ? rawLocalDate : nowIso.slice(0, 10);
 
   // Check and trigger due capsule unlock notifications
   const dueCapsules = db
@@ -391,6 +402,68 @@ authRouter.get('/dashboard', requireAuth, (req: AuthenticatedRequest, res) => {
     .prepare('SELECT COUNT(*) as c FROM time_capsules WHERE user_id = ? AND is_locked = 1 AND unlock_at <= ? AND opened_at IS NULL')
     .get(userId, nowIso) as { c: number }).c;
 
+  const checkInRows = db
+    .prepare(`
+      SELECT m.id, m.title, m.content, m.mood, m.memory_date, m.created_at,
+        m.sentiment_tone, m.emotional_impact, m.sentiment_score, m.sentiment_rationale, m.ai_excluded
+      FROM memories m
+      WHERE m.user_id = ?
+        AND EXISTS (
+          SELECT 1 FROM memory_tags mt
+          WHERE mt.memory_id = m.id AND LOWER(mt.tag) = 'daily-checkin'
+        )
+      ORDER BY m.memory_date DESC, m.created_at DESC
+    `)
+    .all(userId) as Array<{
+    id: string;
+    title: string;
+    content: string;
+    mood: string;
+    memory_date: string;
+    created_at: string;
+    sentiment_tone: string;
+    emotional_impact: string;
+    sentiment_score: number | null;
+    sentiment_rationale: string;
+    ai_excluded: number;
+  }>;
+
+  const todayCheckInRow = checkInRows.find((r) => r.memory_date === localDate) || null;
+  const checkInDateSet = new Set(checkInRows.map((r) => r.memory_date));
+  const shiftIsoDate = (isoDate: string, deltaDays: number): string => {
+    const [y, m, d] = isoDate.split('-').map(Number);
+    const dt = new Date(Date.UTC(y, m - 1, d + deltaDays));
+    return dt.toISOString().slice(0, 10);
+  };
+  let checkInStreak = 0;
+  let cursorDate = checkInDateSet.has(localDate) ? localDate : shiftIsoDate(localDate, -1);
+  while (checkInDateSet.has(cursorDate)) {
+    checkInStreak += 1;
+    cursorDate = shiftIsoDate(cursorDate, -1);
+  }
+
+  const thirtyDaysStart = shiftIsoDate(localDate, -29);
+  const checkInHistory = checkInRows
+    .filter((r) => r.memory_date >= thirtyDaysStart && r.memory_date <= localDate)
+    .slice()
+    .reverse()
+    .map((r) => {
+      const stripped = r.content.replace(/^Daily Check-In Prompt:\s*"[^"]*"\s*/i, '').trim();
+      return {
+        id: r.id,
+        title: r.title,
+        memoryDate: r.memory_date,
+        mood: r.mood,
+        sentimentTone: r.sentiment_tone || '',
+        emotionalImpact: r.emotional_impact || '',
+        sentimentScore: r.sentiment_score !== null && r.sentiment_score !== undefined ? Number(r.sentiment_score) : null,
+        sentimentRationale: r.sentiment_rationale || '',
+        aiExcluded: Boolean(r.ai_excluded),
+        excerpt: stripped.slice(0, 140),
+        createdAt: r.created_at,
+      };
+    });
+
   const humanityHighlights = db
     .prepare(`
       SELECT hp.id, hp.category, hp.title, hp.content, hp.approx_region, hp.created_at,
@@ -416,12 +489,83 @@ authRouter.get('/dashboard', requireAuth, (req: AuthenticatedRequest, res) => {
     .prepare('SELECT COUNT(*) as c FROM notifications WHERE user_id = ? AND is_read = 0')
     .get(userId) as { c: number }).c;
 
+  const monthlyRefRow = db
+    .prepare(
+      "SELECT summary, themes_json, emotional_arc, gentle_prompt, checkin_count, source_ids_json, generated_at FROM monthly_reflections WHERE user_id = ? AND period_key = 'last-30-days'"
+    )
+    .get(userId) as
+    | {
+        summary: string;
+        themes_json: string;
+        emotional_arc: string;
+        gentle_prompt: string;
+        checkin_count: number;
+        source_ids_json: string;
+        generated_at: string;
+      }
+    | undefined;
+
+  let monthlyReflection: {
+    periodKey: string;
+    summary: string;
+    themes: Array<{ name: string; insight: string; memoryIds: string[] }>;
+    emotionalArc: string;
+    gentlePrompt: string;
+    checkInCount: number;
+    sourceIds: string[];
+    generatedAt: string;
+  } | null = null;
+
+  if (monthlyRefRow) {
+    let parsedThemes: Array<{ name: string; insight: string; memoryIds: string[] }> = [];
+    let parsedSourceIds: string[] = [];
+    try {
+      const t = JSON.parse(monthlyRefRow.themes_json || '[]');
+      if (Array.isArray(t)) parsedThemes = t;
+    } catch {
+      parsedThemes = [];
+    }
+    try {
+      const s = JSON.parse(monthlyRefRow.source_ids_json || '[]');
+      if (Array.isArray(s)) parsedSourceIds = s;
+    } catch {
+      parsedSourceIds = [];
+    }
+    monthlyReflection = {
+      periodKey: 'last-30-days',
+      summary: monthlyRefRow.summary,
+      themes: parsedThemes,
+      emotionalArc: monthlyRefRow.emotional_arc,
+      gentlePrompt: monthlyRefRow.gentle_prompt,
+      checkInCount: monthlyRefRow.checkin_count,
+      sourceIds: parsedSourceIds,
+      generatedAt: monthlyRefRow.generated_at,
+    };
+  }
+
   res.json({
     stats: { memoryCount, dreamCount, objectCount, capsuleCount, readyCapsules, unreadNotifications },
     featuredMemory,
     recentMemories,
     onThisDay,
     nextCapsule,
+    dailyCheckIn: {
+      date: localDate,
+      streak: checkInStreak,
+      totalCheckIns: checkInRows.length,
+      history: checkInHistory,
+      monthlyReflection,
+      todayEntry: todayCheckInRow
+        ? {
+            id: todayCheckInRow.id,
+            title: todayCheckInRow.title,
+            content: todayCheckInRow.content,
+            mood: todayCheckInRow.mood,
+            memoryDate: todayCheckInRow.memory_date,
+            createdAt: todayCheckInRow.created_at,
+          }
+        : null,
+    },
     humanityHighlights,
     skillDiscovery,
   });

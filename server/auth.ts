@@ -139,7 +139,7 @@ export function rowToAuthUser(row: Record<string, unknown>): AuthUser {
     avatarMediaId: row.avatar_media_id ? String(row.avatar_media_id) : null,
     locationHint: String(row.location_hint ?? ''),
     timezone: String(row.timezone ?? 'UTC'),
-    theme: typeof row.theme === 'string' && row.theme ? row.theme : 'midnight',
+    theme: typeof row.theme === 'string' && row.theme ? row.theme : 'social',
     emailVerified: Boolean(row.email_verified),
     aiConsent: Boolean(row.ai_consent),
     notificationPrefs,

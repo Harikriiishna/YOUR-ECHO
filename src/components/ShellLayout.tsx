@@ -138,15 +138,18 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => navigateTo('home')}
-            className="touch-manipulation font-display text-lg font-bold tracking-tight text-ink whitespace-nowrap"
+            className="touch-manipulation inline-flex items-center gap-2 font-display text-lg font-bold tracking-tight text-ink whitespace-nowrap"
           >
-            ECHO
+            <span className="w-6 h-6 rounded-lg bg-brand-gradient inline-flex items-center justify-center text-[11px] font-bold text-accent-ink shadow-sm">
+              E
+            </span>
+            <span>ECHO</span>
           </button>
           <button
             type="button"
             onClick={() => setFabOpen(true)}
             title="Quick Capture"
-            className="touch-manipulation inline-flex items-center justify-center w-8 h-8 rounded-lg bg-sky-400 text-slate-950 hover:bg-sky-300 transition-colors"
+            className="touch-manipulation inline-flex items-center justify-center w-8 h-8 rounded-lg bg-brand-gradient text-accent-ink hover:opacity-90 transition-opacity shadow-sm"
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -163,11 +166,11 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
                 onClick={() => navigateTo(item.id)}
                 className={`touch-manipulation w-full flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-colors whitespace-nowrap ${
                   active
-                    ? 'bg-sky-500/15 text-sky-700 dark:text-sky-200 border border-sky-500/35'
+                    ? 'bg-accent-soft text-accent-text border border-accent-border font-semibold'
                     : 'text-ink-muted hover:text-ink hover:bg-tint border border-transparent'
                 }`}
               >
-                <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-sky-600 dark:text-sky-300' : ''}`} />
+                <Icon className={`w-4 h-4 shrink-0 ${active ? 'text-accent-text' : ''}`} />
                 <span className="truncate">{item.label}</span>
               </button>
             );
@@ -188,27 +191,27 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
                       void setTheme(t.id);
                       setThemeMenuOpen(false);
                     }}
-                    className={`touch-manipulation w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-xs transition-colors min-h-[36px] ${
-                      selected
-                        ? 'bg-sky-500/15 text-sky-700 dark:text-sky-200 font-semibold'
-                        : 'text-ink-secondary hover:bg-tint hover:text-ink'
-                    }`}
-                  >
-                    <span className="inline-flex items-center gap-2 min-w-0">
-                      <span
-                        className="w-3.5 h-3.5 rounded-full border border-hairline-strong shrink-0"
-                        style={{
-                          background: `linear-gradient(135deg, ${t.swatches.canvas} 50%, ${t.swatches.accent} 50%)`,
-                        }}
-                      />
-                      <span className="truncate">{t.name}</span>
-                    </span>
-                    {selected && <Check className="w-3.5 h-3.5 shrink-0 text-sky-600 dark:text-sky-300" />}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+                      className={`touch-manipulation w-full flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-xs transition-colors min-h-[36px] ${
+                        selected
+                          ? 'bg-accent-soft text-accent-text font-semibold'
+                          : 'text-ink-secondary hover:bg-tint hover:text-ink'
+                      }`}
+                    >
+                      <span className="inline-flex items-center gap-2 min-w-0">
+                        <span
+                          className="w-3.5 h-3.5 rounded-full border border-hairline-strong shrink-0"
+                          style={{
+                            background: `linear-gradient(135deg, ${t.swatches.canvas} 50%, ${t.swatches.accent} 50%)`,
+                          }}
+                        />
+                        <span className="truncate">{t.name}</span>
+                      </span>
+                      {selected && <Check className="w-3.5 h-3.5 shrink-0 text-accent-text" />}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
           <button
             type="button"
@@ -218,7 +221,7 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
             }`}
           >
             <span className="inline-flex items-center gap-3 min-w-0">
-              <Palette className="w-4 h-4 shrink-0 text-sky-600 dark:text-sky-300" />
+              <Palette className="w-4 h-4 shrink-0 text-accent-text" />
               <span className="truncate">{activeThemeDef.name}</span>
             </span>
           </button>
@@ -294,7 +297,7 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-sky-400 text-slate-950 font-mono text-[10px] font-bold flex items-center justify-center px-1 tabular-nums">
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full bg-accent text-accent-ink font-mono text-[10px] font-bold flex items-center justify-center px-1 tabular-nums">
                   {unreadCount}
                 </span>
               )}
@@ -338,7 +341,7 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
         type="button"
         onClick={() => setFabOpen(true)}
         aria-label="Quick capture menu"
-        className="touch-manipulation lg:hidden fixed right-4 bottom-[74px] z-40 w-12 h-12 rounded-2xl bg-gradient-to-tr from-sky-400 to-cyan-300 text-slate-950 shadow-lg shadow-sky-500/25 flex items-center justify-center"
+        className="touch-manipulation lg:hidden fixed right-4 bottom-[74px] z-40 w-12 h-12 rounded-2xl bg-brand-gradient text-accent-ink shadow-lg flex items-center justify-center"
       >
         <Plus className="w-6 h-6" />
       </button>
@@ -360,7 +363,7 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
               type="button"
               onClick={() => navigateTo(tab.id)}
               className={`touch-manipulation flex flex-col items-center justify-center min-h-[44px] text-[10px] font-medium ${
-                active ? 'text-sky-600 dark:text-sky-300' : 'text-ink-muted'
+                active ? 'text-accent-text font-semibold' : 'text-ink-muted'
               }`}
             >
               <Icon className="w-5 h-5 mb-0.5" />

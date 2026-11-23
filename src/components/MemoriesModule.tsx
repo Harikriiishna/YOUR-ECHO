@@ -667,7 +667,7 @@ export function MemoriesModule() {
           <button
             type="button"
             onClick={openNewEditor}
-            className="inline-flex items-center gap-2 rounded-xl bg-sky-400 px-4 py-2 text-xs font-semibold text-slate-950 hover:bg-sky-300 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
+            className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-accent-ink hover:bg-accent-strong transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
           >
             <Plus className="w-4 h-4" />
             New Memory
@@ -691,7 +691,7 @@ export function MemoriesModule() {
               type="button"
               onClick={() => setView(tab.id as typeof view)}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-                view === tab.id ? 'bg-sky-400 text-slate-950 font-semibold' : 'text-ink-muted hover:text-ink'
+                view === tab.id ? 'bg-accent text-accent-ink font-semibold' : 'text-ink-muted hover:text-ink'
               }`}
             >
               {tab.label}
@@ -939,7 +939,7 @@ export function MemoriesModule() {
                 <button
                   type="button"
                   onClick={openNewEditor}
-                  className="inline-flex items-center gap-2 rounded-xl bg-sky-400 px-4 py-2.5 text-xs font-semibold text-slate-950"
+                  className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs font-semibold text-accent-ink hover:bg-accent-strong transition-colors"
                 >
                   <Plus className="w-4 h-4" /> Capture First Memory
                 </button>
@@ -1335,7 +1335,7 @@ export function MemoriesModule() {
             />
             <button
               type="submit"
-              className="w-full rounded-xl bg-sky-400 px-4 py-2.5 text-xs font-semibold text-slate-950"
+              className="w-full rounded-xl bg-accent px-4 py-2.5 text-xs font-semibold text-accent-ink hover:bg-accent-strong transition-colors"
             >
               Create Collection
             </button>
@@ -2191,7 +2191,7 @@ export function MemoriesModule() {
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-xl bg-sky-400 px-5 py-2.5 text-xs font-semibold text-slate-950 hover:bg-sky-300 disabled:opacity-50"
+                className="rounded-xl bg-accent px-5 py-2.5 text-xs font-semibold text-accent-ink hover:bg-accent-strong disabled:opacity-50 transition-colors"
               >
                 {saving ? 'Saving...' : editingId ? 'Update Memory' : 'Save Memory'}
               </button>

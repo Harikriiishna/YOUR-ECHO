@@ -446,3 +446,112 @@ export async function analyzeMemoryBatchSentiment(
   }
   return out;
 }
+
+export interface MonthlyReflectionTheme {
+  name: string;
+  insight: string;
+  memoryIds: string[];
+}
+
+export interface MonthlyReflectionResult {
+  summary: string;
+  themes: MonthlyReflectionTheme[];
+  emotionalArc: string;
+  gentlePrompt: string;
+}
+
+export async function generateMonthlyCheckInReflection(
+  entries: Array<{
+    id: string;
+    title: string;
+    memoryDate: string;
+    mood: string;
+    emotionalImpact: string;
+    content: string;
+  }>
+): Promise<MonthlyReflectionResult> {
+  if (entries.length === 0) {
+    throw new Error('At least one daily check-in entry is required to generate a Monthly Reflection.');
+  }
+
+  const ai = getClient();
+  const validIds = new Set(entries.map((e) => e.id));
+  const compactEntries = entries.slice(0, 45).map((e) => ({
+    id: e.id,
+    date: e.memoryDate,
+    title: e.title.slice(0, 120),
+    mood: e.mood,
+    emotionalImpact: e.emotionalImpact || undefined,
+    answer: e.content.replace(/^Daily Check-In Prompt:\s*"[^"]*"\s*/i, '').trim().slice(0, 800),
+  }));
+
+  const response = await ai.models.generateContent({
+    model: 'gemini-4-hydrogen',
+    contents: `Daily Check-In entries from the last 30 days (chronological JSON):\n${JSON.stringify(compactEntries)}`,
+    config: {
+      systemInstruction: [
+        'You are ECHO AI, writing a warm, thoughtful "Monthly Reflection" based strictly on the user’s real Daily Check-In entries from the past 30 days.',
+        'STRICT GROUNDING RULES:',
+        '1. Synthesize ONLY patterns, moments, people, and feelings present in the provided entries. Never invent events, habits, or facts.',
+        '2. Keep `summary` concise and evocative (2–3 sentences, max ~70 words) in second person ("you").',
+        '3. Identify 3 to 5 distinct `themes` (or 1–3 themes if only a few entries exist). Each theme needs a short 1–3 word `name`, a 1-sentence grounded `insight`, and `memoryIds` listing only exact matching IDs from the provided JSON.',
+        '4. Write `emotionalArc` as 1 concise sentence describing how the user’s mood or tone evolved or held steady across these check-ins.',
+        '5. Write `gentlePrompt` as 1 warm, open-ended question the user might reflect on heading into the next month.',
+        '6. Never offer medical, clinical, or psychological diagnoses.',
+      ].join('\n'),
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: Type.OBJECT,
+        properties: {
+          summary: { type: Type.STRING },
+          themes: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                name: { type: Type.STRING },
+                insight: { type: Type.STRING },
+                memoryIds: {
+                  type: Type.ARRAY,
+                  items: { type: Type.STRING },
+                },
+              },
+            },
+          },
+          emotionalArc: { type: Type.STRING },
+          gentlePrompt: { type: Type.STRING },
+        },
+      },
+    },
+  });
+
+  const parsed = JSON.parse((response.text ?? '{}').trim()) as {
+    summary?: string;
+    themes?: Array<{ name?: string; insight?: string; memoryIds?: string[] }>;
+    emotionalArc?: string;
+    gentlePrompt?: string;
+  };
+
+  const themes: MonthlyReflectionTheme[] = Array.isArray(parsed.themes)
+    ? parsed.themes
+        .slice(0, 5)
+        .map((t) => ({
+          name: String(t.name || '').trim().slice(0, 48),
+          insight: String(t.insight || '').trim().slice(0, 260),
+          memoryIds: Array.isArray(t.memoryIds)
+            ? Array.from(new Set(t.memoryIds.map(String).filter((id) => validIds.has(id)))).slice(0, 10)
+            : [],
+        }))
+        .filter((t) => t.name && t.insight)
+    : [];
+
+  return {
+    summary:
+      String(parsed.summary || '').trim().slice(0, 600) ||
+      'Your recent daily check-ins capture a quiet rhythm of honest reflection over the past month.',
+    themes,
+    emotionalArc: String(parsed.emotionalArc || '').trim().slice(0, 280),
+    gentlePrompt: String(parsed.gentlePrompt || '').trim().slice(0, 240),
+  };
+}
+

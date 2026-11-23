@@ -135,20 +135,25 @@ export function AuthScreen() {
           alt="Serene midnight horizon with glowing light trails over calm water"
           className="absolute inset-0 w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#070B14] via-[#070B14]/60 to-[#070B14]/35" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#130824] via-[#270D3E]/65 to-[#0F172A]/40" />
 
         <div className="relative z-10 p-5 sm:p-10">
-          <span className="font-display text-xl font-bold tracking-tight text-white">ECHO</span>
+          <span className="inline-flex items-center gap-2 font-display text-xl font-bold tracking-tight text-white">
+            <span className="w-7 h-7 rounded-lg bg-brand-gradient inline-flex items-center justify-center text-xs font-bold text-accent-ink shadow-sm">
+              E
+            </span>
+            ECHO
+          </span>
         </div>
 
         <div className="relative z-10 p-5 sm:p-12 max-w-2xl space-y-3 sm:space-y-4">
-          <p className="text-xs font-medium text-sky-300 tracking-wide">
+          <p className="text-xs font-semibold text-rose-300 tracking-wide">
             The Human Memory Network
           </p>
           <h1 className="font-display text-2xl sm:text-5xl font-bold text-white leading-tight [text-wrap:balance]">
             Save what matters. Understand your life. Connect with humanity.
           </h1>
-          <p className="text-sm sm:text-base text-slate-300 leading-relaxed max-w-xl">
+          <p className="text-sm sm:text-base text-slate-200 leading-relaxed max-w-xl">
             One unified archive for life memories, grounded AI reflection, locked future time capsules, anonymous wisdom, skill exchanges, heirloom objects, and dreams.
           </p>
           <div className="pt-1 flex flex-wrap gap-x-4 gap-y-1.5 text-xs text-slate-300/90">
@@ -170,7 +175,7 @@ export function AuthScreen() {
               onClick={cycleTheme}
               className="touch-manipulation inline-flex items-center gap-1.5 rounded-xl border border-hairline bg-surface px-3 py-1.5 text-xs font-medium text-ink-secondary hover:text-ink hover:border-hairline-strong transition-colors min-h-[36px]"
             >
-              <Palette className="w-3.5 h-3.5 text-sky-600 dark:text-sky-300" />
+              <Palette className="w-3.5 h-3.5 text-accent-text" />
               Switch Theme
             </button>
           </div>
@@ -196,7 +201,7 @@ export function AuthScreen() {
                 setError(null);
               }}
               className={`py-2 px-1 text-[11px] sm:text-xs font-medium rounded-lg transition-colors truncate ${
-                mode === 'register' ? 'bg-sky-500 text-slate-950 font-semibold' : 'text-ink-muted hover:text-ink'
+                mode === 'register' ? 'bg-accent text-accent-ink font-semibold' : 'text-ink-muted hover:text-ink'
               }`}
             >
               Create Account
@@ -208,7 +213,7 @@ export function AuthScreen() {
                 setError(null);
               }}
               className={`py-2 px-1 text-[11px] sm:text-xs font-medium rounded-lg transition-colors truncate ${
-                mode === 'login' ? 'bg-sky-500 text-slate-950 font-semibold' : 'text-ink-muted hover:text-ink'
+                mode === 'login' ? 'bg-accent text-accent-ink font-semibold' : 'text-ink-muted hover:text-ink'
               }`}
             >
               Sign In
@@ -220,7 +225,7 @@ export function AuthScreen() {
                 setError(null);
               }}
               className={`py-2 px-1 text-[11px] sm:text-xs font-medium rounded-lg transition-colors truncate ${
-                mode === 'reset' ? 'bg-sky-500 text-slate-950 font-semibold' : 'text-ink-muted hover:text-ink'
+                mode === 'reset' ? 'bg-accent text-accent-ink font-semibold' : 'text-ink-muted hover:text-ink'
               }`}
             >
               Reset
@@ -308,7 +313,7 @@ export function AuthScreen() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-400 to-cyan-300 px-5 py-3 text-sm font-semibold text-slate-950 hover:opacity-95 disabled:opacity-60 transition-opacity min-h-[44px]"
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-brand-gradient px-5 py-3 text-sm font-semibold text-accent-ink hover:opacity-95 disabled:opacity-60 transition-opacity min-h-[44px] shadow-md"
             >
               {mode === 'register' && <Sparkles className="w-4 h-4" />}
               {mode === 'reset' && <KeyRound className="w-4 h-4" />}

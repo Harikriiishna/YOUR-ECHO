@@ -1,7 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Router } from 'express';
-import { analyzeMemorySentiment, generateMemoryAssist, runMemoryAiQuery, transcribeAudioBuffer } from '../ai.ts';
+import {
+  analyzeMemorySentiment,
+  generateMemoryAssist,
+  generateMonthlyCheckInReflection,
+  runMemoryAiQuery,
+  transcribeAudioBuffer,
+} from '../ai.ts';
 import { type AuthenticatedRequest, rateLimit, requireAuth } from '../auth.ts';
 import { db, newId, UPLOADS_DIR } from '../db.ts';
 import { pushNotification } from '../ws.ts';
@@ -424,3 +430,115 @@ capsuleAndAiRouter.post(
     }
   }
 );
+
+capsuleAndAiRouter.post(
+  '/ai/monthly-reflection',
+  requireAuth,
+  rateLimit('ai', 10, 60_000),
+  async (req: AuthenticatedRequest, res) => {
+    const user = req.authUser!;
+    if (!user.aiConsent) {
+      res.status(403).json({ error: 'AI features are currently disabled in your privacy settings.' });
+      return;
+    }
+
+    const rawLocalDate =
+      typeof (req.body as { localDate?: string })?.localDate === 'string'
+        ? (req.body as { localDate?: string }).localDate!.trim()
+        : '';
+    const localDate = /^\d{4}-\d{2}-\d{2}$/.test(rawLocalDate)
+      ? rawLocalDate
+      : new Date().toISOString().slice(0, 10);
+
+    const [y, m, d] = localDate.split('-').map(Number);
+    const start30Date = new Date(Date.UTC(y, m - 1, d - 29)).toISOString().slice(0, 10);
+
+    const rows = db
+      .prepare(`
+        SELECT m.id, m.title, m.content, m.memory_date, m.mood, m.emotional_impact
+        FROM memories m
+        WHERE m.user_id = ?
+          AND m.ai_excluded = 0
+          AND m.memory_date >= ?
+          AND m.memory_date <= ?
+          AND EXISTS (
+            SELECT 1 FROM memory_tags mt
+            WHERE mt.memory_id = m.id AND LOWER(mt.tag) = 'daily-checkin'
+          )
+        ORDER BY m.memory_date ASC, m.created_at ASC
+        LIMIT 45
+      `)
+      .all(user.id, start30Date, localDate) as Array<{
+      id: string;
+      title: string;
+      content: string;
+      memory_date: string;
+      mood: string;
+      emotional_impact: string;
+    }>;
+
+    if (rows.length === 0) {
+      res.status(400).json({
+        error: 'Save at least one AI-accessible daily check-in from the last 30 days to generate your Monthly Reflection.',
+      });
+      return;
+    }
+
+    try {
+      const entries = rows.map((r) => ({
+        id: r.id,
+        title: r.title,
+        memoryDate: r.memory_date,
+        mood: r.mood,
+        emotionalImpact: r.emotional_impact,
+        content: r.content,
+      }));
+      const result = await generateMonthlyCheckInReflection(entries);
+      const sourceIds = entries.map((e) => e.id);
+      const generatedAt = new Date().toISOString();
+      const reflectionId = newId('mref');
+
+      db.prepare(`
+        INSERT INTO monthly_reflections (
+          id, user_id, period_key, summary, themes_json, emotional_arc, gentle_prompt, checkin_count, source_ids_json, generated_at
+        )
+        VALUES (?, ?, 'last-30-days', ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, period_key) DO UPDATE SET
+          summary = excluded.summary,
+          themes_json = excluded.themes_json,
+          emotional_arc = excluded.emotional_arc,
+          gentle_prompt = excluded.gentle_prompt,
+          checkin_count = excluded.checkin_count,
+          source_ids_json = excluded.source_ids_json,
+          generated_at = excluded.generated_at
+      `).run(
+        reflectionId,
+        user.id,
+        result.summary,
+        JSON.stringify(result.themes),
+        result.emotionalArc,
+        result.gentlePrompt,
+        entries.length,
+        JSON.stringify(sourceIds),
+        generatedAt
+      );
+
+      res.json({
+        reflection: {
+          periodKey: 'last-30-days',
+          summary: result.summary,
+          themes: result.themes,
+          emotionalArc: result.emotionalArc,
+          gentlePrompt: result.gentlePrompt,
+          checkInCount: entries.length,
+          sourceIds,
+          generatedAt,
+        },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to generate Monthly Reflection.';
+      res.status(502).json({ error: message });
+    }
+  }
+);
+

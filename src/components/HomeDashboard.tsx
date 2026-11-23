@@ -16,7 +16,10 @@ import {
 import { useEcho } from '../context/EchoContext';
 import { apiRequest } from '../lib/api';
 import type { ModuleId } from '../types/echo';
+import { DailyCheckInCard, type DailyCheckInStatus } from './DailyCheckInCard';
+import { DailyCheckInSentimentChart } from './DailyCheckInSentimentChart';
 import { SafeImage } from './MediaElements';
+import { MonthlyReflectionCard } from './MonthlyReflectionCard';
 
 interface DashboardData {
   stats: {
@@ -58,6 +61,7 @@ interface DashboardData {
     unlock_occasion: string;
     unlock_at: string;
   } | null;
+  dailyCheckIn?: DailyCheckInStatus;
   humanityHighlights: Array<{
     id: string;
     category: string;
@@ -94,10 +98,14 @@ export function HomeDashboard() {
   const [aiQuestion, setAiQuestion] = useState('');
   const [nowTick, setNowTick] = useState(Date.now());
 
+  const localDate = new Date().toLocaleDateString('en-CA');
+
   const loadDashboard = async () => {
     try {
       setLoading(true);
-      const res = await apiRequest<DashboardData>('/dashboard');
+      const res = await apiRequest<DashboardData>(
+        `/dashboard?localDate=${encodeURIComponent(new Date().toLocaleDateString('en-CA'))}`
+      );
       setData(res);
       void refreshNotifications();
     } catch (err) {
@@ -187,22 +195,22 @@ export function HomeDashboard() {
 
   return (
     <div className="space-y-6 sm:space-y-8 min-w-0 w-full">
-      {/* Greeting & Real Archive Summary (dark photo scrim keeps white text legible in all themes) */}
-      <section className="relative overflow-hidden rounded-2xl border border-hairline bg-[#0D1424] w-full">
+      {/* Greeting & Real Archive Summary (rich plum-coral scrim keeps white text legible in all themes) */}
+      <section className="relative overflow-hidden rounded-2xl border border-hairline bg-[#190B2B] w-full">
         <SafeImage
           src="/src/assets/images/echo_hero_cosmos_1795260972427.jpg"
           alt="Midnight sky and glowing memory trails"
           className="absolute inset-0 w-full h-full object-cover opacity-35"
         />
-        <div className="relative z-10 bg-gradient-to-r from-[#070B14]/95 via-[#070B14]/80 to-[#070B14]/65 p-5 sm:p-8 flex flex-col lg:flex-row lg:items-end justify-between gap-6 min-w-0">
+        <div className="relative z-10 bg-gradient-to-r from-[#1A082C]/92 via-[#3B1045]/82 to-[#131936]/78 p-5 sm:p-8 flex flex-col lg:flex-row lg:items-end justify-between gap-6 min-w-0">
           <div className="space-y-2 max-w-2xl">
-            <p className="text-xs text-sky-300 font-medium">
+            <p className="text-xs text-rose-300 font-semibold">
               {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
             </p>
             <h1 className="font-display text-2xl sm:text-4xl font-bold text-white [text-wrap:balance]">
               {greeting}, {user?.displayName}
             </h1>
-            <p className="text-sm text-slate-300 leading-relaxed">
+            <p className="text-sm text-slate-200 leading-relaxed">
               {reflection}
             </p>
           </div>
@@ -236,6 +244,33 @@ export function HomeDashboard() {
         </div>
       )}
 
+      {/* Mindful Daily Check-In */}
+      <DailyCheckInCard
+        localDate={localDate}
+        checkIn={data?.dailyCheckIn || null}
+        aiConsent={Boolean(user?.aiConsent)}
+        onSaved={loadDashboard}
+        onNavigate={navigateTo}
+      />
+
+      {/* Check-In Sentiment Analysis (Last 30 Days) */}
+      <DailyCheckInSentimentChart
+        localDate={localDate}
+        checkIn={data?.dailyCheckIn || null}
+        aiConsent={Boolean(user?.aiConsent)}
+        onRefresh={loadDashboard}
+        onNavigate={navigateTo}
+      />
+
+      {/* Gemini AI Monthly Reflection */}
+      <MonthlyReflectionCard
+        localDate={localDate}
+        checkIn={data?.dailyCheckIn || null}
+        aiConsent={Boolean(user?.aiConsent)}
+        onRefresh={loadDashboard}
+        onNavigate={navigateTo}
+      />
+
       {/* Primary Split: Quick Capture + Featured Memory or Genuine Onboarding Empty State */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* Quick Memory Capture */}
@@ -249,7 +284,7 @@ export function HomeDashboard() {
               <button
                 type="button"
                 onClick={() => setQuickCaptureTarget('memory')}
-                className="text-xs font-medium text-sky-600 dark:text-sky-300 hover:underline whitespace-nowrap shrink-0"
+                className="text-xs font-medium text-accent-text hover:underline whitespace-nowrap shrink-0"
               >
                 Full Editor
               </button>
@@ -259,21 +294,21 @@ export function HomeDashboard() {
               value={quickTitle}
               onChange={(e) => setQuickTitle(e.target.value)}
               placeholder="Give this moment a title (optional)"
-              className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-sky-400"
+              className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-accent"
             />
             <textarea
               rows={4}
               value={quickText}
               onChange={(e) => setQuickText(e.target.value)}
               placeholder="Write what happened, who was there, or how tonight felt..."
-              className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-sky-400 resize-none"
+              className="w-full rounded-xl border border-hairline-strong bg-inset px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-muted focus:outline-none focus:border-accent resize-none"
             />
           </div>
 
           <button
             type="submit"
             disabled={savingQuick || !quickText.trim()}
-            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-sky-400 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-sky-300 disabled:opacity-50 transition-colors min-h-[44px]"
+            className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-sm font-semibold text-accent-ink hover:bg-accent-strong disabled:opacity-50 transition-colors min-h-[44px]"
           >
             <Plus className="w-4 h-4" />
             {savingQuick ? 'Saving...' : 'Save to ECHO Memory'}
@@ -285,7 +320,7 @@ export function HomeDashboard() {
           {data?.featuredMemory ? (
             <div className="space-y-4">
               <div className="flex items-center justify-between gap-4">
-                <span className="text-xs font-medium text-sky-600 dark:text-sky-300">
+                <span className="text-xs font-medium text-accent-text">
                   Featured Memory · {data.featuredMemory.category} · {data.featuredMemory.memory_date}
                 </span>
                 <button
@@ -307,7 +342,7 @@ export function HomeDashboard() {
             </div>
           ) : (
             <div className="space-y-4 my-auto py-4">
-              <p className="text-xs font-medium text-sky-600 dark:text-sky-300">Your archive begins here</p>
+              <p className="text-xs font-medium text-accent-text">Your archive begins here</p>
               <h3 className="font-display text-2xl font-bold text-ink [text-wrap:balance]">
                 No memories recorded yet — only yours will ever live here.
               </h3>
@@ -512,7 +547,7 @@ export function HomeDashboard() {
             <button
               type="button"
               onClick={() => navigateTo('memories')}
-              className="text-xs text-sky-600 dark:text-sky-300 hover:underline"
+              className="text-xs text-accent-text hover:underline"
             >
               View all
             </button>

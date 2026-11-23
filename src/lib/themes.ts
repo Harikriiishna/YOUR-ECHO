@@ -1,4 +1,12 @@
-export type EchoThemeId = 'midnight' | 'glass' | 'crystal' | 'aurora' | 'amber' | 'violet';
+export type EchoThemeId =
+  | 'social'
+  | 'social-dark'
+  | 'midnight'
+  | 'glass'
+  | 'crystal'
+  | 'aurora'
+  | 'amber'
+  | 'violet';
 
 export interface EchoThemeDefinition {
   id: EchoThemeId;
@@ -15,6 +23,32 @@ export interface EchoThemeDefinition {
 }
 
 export const ECHO_THEMES: EchoThemeDefinition[] = [
+  {
+    id: 'social',
+    name: 'Social Bloom',
+    tagline: 'Crisp creator-feed light canvas with coral-rose & electric violet accents',
+    isDark: false,
+    isGlass: false,
+    swatches: {
+      canvas: '#F6F5FB',
+      surface: '#FFFFFF',
+      accent: '#E11D48',
+      secondary: '#7C3AED',
+    },
+  },
+  {
+    id: 'social-dark',
+    name: 'Social Pulse Dark',
+    tagline: 'Luminous coral-magenta & electric violet highlights on deep indigo night',
+    isDark: true,
+    isGlass: false,
+    swatches: {
+      canvas: '#0A0812',
+      surface: '#141022',
+      accent: '#F43F5E',
+      secondary: '#8B5CF6',
+    },
+  },
   {
     id: 'midnight',
     name: 'Midnight Obsidian',
@@ -96,21 +130,30 @@ export const ECHO_THEMES: EchoThemeDefinition[] = [
 ];
 
 const THEME_STORAGE_KEY = 'echo_theme';
+const THEME_SOCIAL_MIGRATED_KEY = 'echo_theme_social_migrated';
 const VALID_THEME_IDS = new Set<string>(ECHO_THEMES.map((t) => t.id));
 
 export function normalizeThemeId(value: unknown): EchoThemeId {
   if (typeof value === 'string' && VALID_THEME_IDS.has(value)) {
     return value as EchoThemeId;
   }
-  return 'midnight';
+  return 'social';
 }
 
 export function getSavedThemeId(): EchoThemeId {
-  if (typeof window === 'undefined') return 'midnight';
+  if (typeof window === 'undefined') return 'social';
   try {
-    return normalizeThemeId(window.localStorage.getItem(THEME_STORAGE_KEY));
+    const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (!window.localStorage.getItem(THEME_SOCIAL_MIGRATED_KEY)) {
+      window.localStorage.setItem(THEME_SOCIAL_MIGRATED_KEY, '1');
+      if (!saved || saved === 'midnight') {
+        window.localStorage.setItem(THEME_STORAGE_KEY, 'social');
+        return 'social';
+      }
+    }
+    return normalizeThemeId(saved);
   } catch {
-    return 'midnight';
+    return 'social';
   }
 }
 
@@ -126,6 +169,10 @@ export function applyThemeToDocument(themeId: EchoThemeId): void {
   } else {
     root.classList.remove('dark');
     root.style.colorScheme = 'light';
+  }
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeMeta) {
+    themeMeta.setAttribute('content', def.swatches.canvas);
   }
   try {
     window.localStorage.setItem(THEME_STORAGE_KEY, resolved);

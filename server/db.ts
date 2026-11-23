@@ -30,7 +30,7 @@ export function initDatabase(): void {
       avatar_media_id TEXT,
       location_hint TEXT NOT NULL DEFAULT '',
       timezone TEXT NOT NULL DEFAULT 'UTC',
-      theme TEXT NOT NULL DEFAULT 'midnight',
+      theme TEXT NOT NULL DEFAULT 'social',
       email_verified INTEGER NOT NULL DEFAULT 1,
       ai_consent INTEGER NOT NULL DEFAULT 1,
       notification_prefs_json TEXT NOT NULL DEFAULT '{"memoryReminders":true,"onThisDay":true,"capsuleUnlocks":true,"wisdomReplies":true,"humanityReactions":true,"skillMatches":true,"sessionReminders":true}',
@@ -312,6 +312,20 @@ export function initDatabase(): void {
       PRIMARY KEY(user_id, client_mutation_id)
     );
 
+    CREATE TABLE IF NOT EXISTS monthly_reflections (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      period_key TEXT NOT NULL,
+      summary TEXT NOT NULL,
+      themes_json TEXT NOT NULL DEFAULT '[]',
+      emotional_arc TEXT NOT NULL DEFAULT '',
+      gentle_prompt TEXT NOT NULL DEFAULT '',
+      checkin_count INTEGER NOT NULL DEFAULT 0,
+      source_ids_json TEXT NOT NULL DEFAULT '[]',
+      generated_at TEXT NOT NULL,
+      UNIQUE(user_id, period_key)
+    );
+
     CREATE INDEX IF NOT EXISTS idx_memories_user_date ON memories(user_id, memory_date DESC);
     CREATE INDEX IF NOT EXISTS idx_memory_tags_mem ON memory_tags(memory_id);
     CREATE INDEX IF NOT EXISTS idx_memory_people_mem ON memory_people(memory_id);
@@ -323,11 +337,17 @@ export function initDatabase(): void {
     CREATE INDEX IF NOT EXISTS idx_dreams_user_date ON dreams(user_id, dream_date DESC);
     CREATE INDEX IF NOT EXISTS idx_objects_user ON objects(user_id, created_at DESC);
     CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, is_read, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_monthly_reflections_user ON monthly_reflections(user_id, period_key);
   `);
 
   const userCols = db.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>;
   if (!userCols.some((c) => c.name === 'theme')) {
-    db.exec("ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'midnight'");
+    db.exec("ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'social'");
+  }
+  const userVersionRow = db.prepare('PRAGMA user_version').get() as { user_version: number } | undefined;
+  if ((userVersionRow?.user_version ?? 0) < 1) {
+    db.exec("UPDATE users SET theme = 'social' WHERE theme = 'midnight'");
+    db.exec('PRAGMA user_version = 1');
   }
 
   const memoryCols = db.prepare('PRAGMA table_info(memories)').all() as Array<{ name: string }>;
