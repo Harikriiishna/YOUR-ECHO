@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useEcho } from '../context/EchoContext';
 import { apiRequest } from '../lib/api';
+import { getCategoryStyle } from '../lib/memoryCategories';
 import { ECHO_THEMES, getSavedThemeId } from '../lib/themes';
 import type { MemoryItem } from '../types/echo';
 
@@ -712,11 +713,28 @@ export function MemoriesMapView({
           {selectedPlotted && (
             <div className="rounded-xl border border-accent-border bg-inset p-4 space-y-2.5">
               <div className="flex items-start justify-between gap-2">
-                <div className="text-[11px] font-mono text-ink-muted tabular-nums">
-                  {selectedPlotted.memory.memoryDate} · {selectedPlotted.memory.category}
-                  {selectedPlotted.memory.emotionalImpact
-                    ? ` · ${selectedPlotted.memory.emotionalImpact}`
-                    : ''}
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono text-ink-muted tabular-nums">
+                  <span>
+                    {selectedPlotted.memory.memoryDate}
+                    {selectedPlotted.memory.emotionalImpact
+                      ? ` · ${selectedPlotted.memory.emotionalImpact}`
+                      : ''}
+                  </span>
+                  {(() => {
+                    const catStyle = getCategoryStyle(selectedPlotted.memory.category);
+                    return (
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-sans text-[10px] font-medium ${catStyle.badgeClass}`}
+                      >
+                        <span
+                          className="w-1.5 h-1.5 rounded-full shrink-0"
+                          style={{ backgroundColor: catStyle.dotHex }}
+                          aria-hidden="true"
+                        />
+                        {selectedPlotted.memory.category}
+                      </span>
+                    );
+                  })()}
                 </div>
                 <button
                   type="button"
@@ -861,9 +879,26 @@ export function MemoriesMapView({
                           {item.memory.memoryDate}
                         </span>
                       </div>
-                      <div className="text-[11px] text-ink-muted truncate">
-                        {item.memory.locationName || 'Pinned coordinates'}
-                        {item.coordSource === 'estimated' ? ' · Approx.' : ''}
+                      <div className="flex items-center justify-between gap-2 text-[11px] text-ink-muted">
+                        <span className="truncate">
+                          {item.memory.locationName || 'Pinned coordinates'}
+                          {item.coordSource === 'estimated' ? ' · Approx.' : ''}
+                        </span>
+                        {(() => {
+                          const catStyle = getCategoryStyle(item.memory.category);
+                          return (
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium shrink-0 ${catStyle.badgeClass}`}
+                            >
+                              <span
+                                className="w-1.5 h-1.5 rounded-full shrink-0"
+                                style={{ backgroundColor: catStyle.dotHex }}
+                                aria-hidden="true"
+                              />
+                              {item.memory.category}
+                            </span>
+                          );
+                        })()}
                       </div>
                     </button>
                   );

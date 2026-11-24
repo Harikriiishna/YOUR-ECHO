@@ -278,8 +278,8 @@ memoryMediaRouter.get('/memories', requireAuth, (req: AuthenticatedRequest, res)
   }
 
   if (category && category !== 'All') {
-    wheres.push('m.category = ?');
-    params.push(category);
+    wheres.push('LOWER(m.category) = LOWER(?)');
+    params.push(category.trim());
   }
   if (mood && mood !== 'All') {
     wheres.push('(LOWER(m.mood) = LOWER(?) OR LOWER(m.sentiment_tone) = LOWER(?))');
@@ -429,8 +429,9 @@ memoryMediaRouter.delete('/memories/tags/:tag', requireAuth, (req: Authenticated
 
 memoryMediaRouter.get('/memories/sentiment-summary', requireAuth, (req: AuthenticatedRequest, res) => {
   const rows = db
-    .prepare('SELECT emotional_impact, sentiment_tone, mood, ai_excluded FROM memories WHERE user_id = ?')
+    .prepare('SELECT category, emotional_impact, sentiment_tone, mood, ai_excluded FROM memories WHERE user_id = ?')
     .all(req.authUser!.id) as Array<{
+    category: string;
     emotional_impact: string;
     sentiment_tone: string;
     mood: string;
@@ -444,8 +445,16 @@ memoryMediaRouter.get('/memories/sentiment-summary', requireAuth, (req: Authenti
   let unanalyzedCount = 0;
   let analyzableUnanalyzedCount = 0;
   const toneCounts = new Map<string, { tone: string; count: number }>();
+  const categoryCountsMap = new Map<string, { category: string; count: number }>();
 
   for (const r of rows) {
+    const cat = (r.category || '').trim();
+    if (cat) {
+      const catKey = cat.toLowerCase();
+      const prevCat = categoryCountsMap.get(catKey);
+      if (prevCat) prevCat.count += 1;
+      else categoryCountsMap.set(catKey, { category: cat, count: 1 });
+    }
     const imp = (r.emotional_impact || '').trim();
     if (imp) {
       impactCounts[imp] = (impactCounts[imp] || 0) + 1;
@@ -468,6 +477,9 @@ memoryMediaRouter.get('/memories/sentiment-summary', requireAuth, (req: Authenti
     analyzableUnanalyzedCount,
     impactCounts,
     tones: [...toneCounts.values()].sort((a, b) => b.count - a.count || a.tone.localeCompare(b.tone)),
+    categoryCounts: [...categoryCountsMap.values()].sort(
+      (a, b) => b.count - a.count || a.category.localeCompare(b.category)
+    ),
   });
 });
 
@@ -892,6 +904,36 @@ memoryMediaRouter.post('/memories/:id/tags', requireAuth, (req: AuthenticatedReq
     syncMemoryTags(existing.id, normalized);
     db.prepare('UPDATE memories SET updated_at = ? WHERE id = ?').run(new Date().toISOString(), existing.id);
   })();
+
+  const updated = db.prepare('SELECT * FROM memories WHERE id = ?').get(existing.id) as Record<string, unknown>;
+  res.json({ memory: hydrateMemoryRow(updated) });
+});
+
+memoryMediaRouter.post('/memories/:id/category', requireAuth, (req: AuthenticatedRequest, res) => {
+  const userId = req.authUser!.id;
+  const existing = db
+    .prepare('SELECT id FROM memories WHERE id = ? AND user_id = ?')
+    .get(req.params.id, userId) as { id: string } | undefined;
+
+  if (!existing) {
+    res.status(404).json({ error: 'Memory not found.' });
+    return;
+  }
+
+  const cleanCategory = String((req.body as { category?: string })?.category || '')
+    .trim()
+    .slice(0, 48);
+  if (!cleanCategory) {
+    res.status(400).json({ error: 'Category name is required.' });
+    return;
+  }
+
+  db.prepare('UPDATE memories SET category = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(
+    cleanCategory,
+    new Date().toISOString(),
+    existing.id,
+    userId
+  );
 
   const updated = db.prepare('SELECT * FROM memories WHERE id = ?').get(existing.id) as Record<string, unknown>;
   res.json({ memory: hydrateMemoryRow(updated) });

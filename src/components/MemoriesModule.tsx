@@ -28,21 +28,7 @@ import { apiRequest, readOfflineCache, saveOfflineCache } from '../lib/api';
 import type { MediaMeta, MemoryCollection, MemoryItem } from '../types/echo';
 import { AuthMedia, MediaPicker, VoiceRecorder } from './MediaElements';
 import { MemoriesMapView } from './MemoriesMapView';
-
-const DEFAULT_CATEGORIES = [
-  'Childhood',
-  'Family',
-  'Friends',
-  'Love',
-  'Travel',
-  'Happiness',
-  'Sadness',
-  'Achievements',
-  'Failures',
-  'Life lessons',
-  'Dreams',
-  'Important moments',
-];
+import { DEFAULT_CATEGORIES, PRIMARY_CATEGORIES, getCategoryStyle } from '../lib/memoryCategories';
 
 const MOODS = [
   'Joyful',
@@ -103,6 +89,7 @@ interface SentimentSummary {
   analyzableUnanalyzedCount: number;
   impactCounts: Record<string, number>;
   tones: Array<{ tone: string; count: number }>;
+  categoryCounts?: Array<{ category: string; count: number }>;
 }
 
 function getImpactStyle(impact: string) {
@@ -138,6 +125,7 @@ export function MemoriesModule() {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [sentimentBusy, setSentimentBusy] = useState(false);
   const [analyzingMemoryId, setAnalyzingMemoryId] = useState<string | null>(null);
+  const [updatingCategoryId, setUpdatingCategoryId] = useState<string | null>(null);
   const [sentimentNotice, setSentimentNotice] = useState<string | null>(null);
 
   const [activeMemory, setActiveMemory] = useState<MemoryItem | null>(null);
@@ -164,7 +152,7 @@ export function MemoriesModule() {
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
   const [mood, setMood] = useState('Reflective');
-  const [category, setCategory] = useState('Important moments');
+  const [category, setCategory] = useState('Personal');
   const [customCategory, setCustomCategory] = useState('');
   const [editorTags, setEditorTags] = useState<string[]>([]);
   const [editorTagDraft, setEditorTagDraft] = useState('');
@@ -258,7 +246,7 @@ export function MemoriesModule() {
     setLatitude('');
     setLongitude('');
     setMood('Reflective');
-    setCategory('Important moments');
+    setCategory('Personal');
     setCustomCategory('');
     setEditorTags([]);
     setEditorTagDraft('');
@@ -284,8 +272,11 @@ export function MemoriesModule() {
     setLatitude(m.latitude !== null ? String(m.latitude) : '');
     setLongitude(m.longitude !== null ? String(m.longitude) : '');
     setMood(m.mood);
-    if (DEFAULT_CATEGORIES.includes(m.category)) {
-      setCategory(m.category);
+    const matchedDefault = DEFAULT_CATEGORIES.find(
+      (c) => c.toLowerCase() === m.category.trim().toLowerCase()
+    );
+    if (matchedDefault) {
+      setCategory(matchedDefault);
       setCustomCategory('');
     } else {
       setCategory('Custom');
@@ -546,6 +537,26 @@ export function MemoriesModule() {
     setAllTagsDirectory(tagsRes.tags);
   };
 
+  const handleUpdateMemoryCategory = async (memoryId: string, nextCategory: string) => {
+    const clean = nextCategory.trim().slice(0, 48);
+    if (!clean) return;
+    setUpdatingCategoryId(memoryId);
+    try {
+      const res = await apiRequest<{ memory: MemoryItem }>(`/memories/${encodeURIComponent(memoryId)}/category`, {
+        method: 'POST',
+        body: JSON.stringify({ category: clean }),
+      });
+      setMemories((prev) => prev.map((x) => (x.id === memoryId ? res.memory : x)));
+      if (activeMemory?.id === memoryId) {
+        setActiveMemory(res.memory);
+      }
+      const summaryRes = await apiRequest<SentimentSummary>('/memories/sentiment-summary');
+      setSentimentSummary(summaryRes);
+    } finally {
+      setUpdatingCategoryId(null);
+    }
+  };
+
   const handleRenameTag = async (oldTag: string) => {
     const cleanNew = renameTagDraft.trim().replace(/^#+/, '').slice(0, 40);
     if (!cleanNew || cleanNew.toLowerCase() === oldTag.toLowerCase()) {
@@ -589,6 +600,67 @@ export function MemoriesModule() {
       setTagManagerBusy(false);
     }
   };
+
+  const categoryCountMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const item of sentimentSummary?.categoryCounts || []) {
+      map.set(item.category.toLowerCase(), item.count);
+    }
+    if (map.size === 0) {
+      for (const m of memories) {
+        const key = m.category.trim().toLowerCase();
+        if (key) map.set(key, (map.get(key) || 0) + 1);
+      }
+    }
+    return map;
+  }, [sentimentSummary?.categoryCounts, memories]);
+
+  const availableCategories = useMemo(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const c of DEFAULT_CATEGORIES) {
+      const key = c.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push(c);
+      }
+    }
+    for (const item of sentimentSummary?.categoryCounts || []) {
+      const clean = item.category.trim();
+      const key = clean.toLowerCase();
+      if (clean && !seen.has(key)) {
+        seen.add(key);
+        list.push(clean);
+      }
+    }
+    for (const m of memories) {
+      const clean = m.category.trim();
+      const key = clean.toLowerCase();
+      if (clean && !seen.has(key)) {
+        seen.add(key);
+        list.push(clean);
+      }
+    }
+    return list;
+  }, [sentimentSummary?.categoryCounts, memories]);
+
+  const filterStripCategories = useMemo(() => {
+    const seen = new Set<string>();
+    const list: string[] = [];
+    for (const c of PRIMARY_CATEGORIES) {
+      seen.add(c.toLowerCase());
+      list.push(c);
+    }
+    for (const item of sentimentSummary?.categoryCounts || []) {
+      const clean = item.category.trim();
+      const key = clean.toLowerCase();
+      if (clean && !seen.has(key)) {
+        seen.add(key);
+        list.push(clean);
+      }
+    }
+    return list;
+  }, [sentimentSummary?.categoryCounts]);
 
   const peopleDirectory = useMemo(() => {
     const counts = new Map<string, number>();
@@ -712,10 +784,11 @@ export function MemoriesModule() {
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
+            aria-label="Filter by category"
             className="flex-1 sm:flex-none rounded-xl border border-hairline-strong bg-surface px-3 py-2 text-xs text-ink-secondary focus:outline-none min-w-0"
           >
             <option value="All">All Categories</option>
-            {DEFAULT_CATEGORIES.map((c) => (
+            {availableCategories.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
@@ -751,6 +824,54 @@ export function MemoriesModule() {
           </button>
         </div>
       </div>
+
+      {/* Category Tag Filter Strip */}
+      {view !== 'tags' && (
+        <div className="rounded-xl border border-hairline bg-surface px-3 py-2.5 flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          <span className="text-[11px] font-medium text-ink-muted whitespace-nowrap shrink-0 mr-1">
+            Category:
+          </span>
+          <button
+            type="button"
+            onClick={() => setCategoryFilter('All')}
+            className={`touch-manipulation inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors whitespace-nowrap shrink-0 min-h-[34px] ${
+              categoryFilter === 'All'
+                ? 'border-accent-border bg-accent-soft text-accent-text font-semibold'
+                : 'border-hairline bg-inset text-ink-secondary hover:text-ink'
+            }`}
+          >
+            <span>All</span>
+            {sentimentSummary && (
+              <span className="font-mono text-[11px] text-ink-muted tabular-nums">
+                {sentimentSummary.totalMemories}
+              </span>
+            )}
+          </button>
+          {filterStripCategories.map((cat) => {
+            const style = getCategoryStyle(cat);
+            const active = categoryFilter.toLowerCase() === cat.toLowerCase();
+            const count = categoryCountMap.get(cat.toLowerCase()) || 0;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setCategoryFilter(active ? 'All' : cat)}
+                className={`touch-manipulation inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors whitespace-nowrap shrink-0 min-h-[34px] ${
+                  active ? style.activeClass : style.badgeClass
+                }`}
+              >
+                <span
+                  className="w-2 h-2 rounded-full shrink-0"
+                  style={{ backgroundColor: style.dotHex }}
+                  aria-hidden="true"
+                />
+                <span>{cat}</span>
+                <span className="font-mono text-[11px] opacity-75 tabular-nums">{count}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Emotional Impact Filter & AI Sentiment Strip */}
       {view !== 'tags' && (
@@ -886,11 +1007,12 @@ export function MemoriesModule() {
         </div>
       )}
 
-      {(selectedCollectionId || selectedPerson || selectedTags.length > 0 || impactFilter !== 'All' || moodFilter !== 'All') && (
+      {(categoryFilter !== 'All' || selectedCollectionId || selectedPerson || selectedTags.length > 0 || impactFilter !== 'All' || moodFilter !== 'All') && (
         <div className="flex flex-wrap items-center gap-3 text-xs text-sky-700 dark:text-sky-300">
           <span>
             Filtered by{' '}
             {[
+              categoryFilter !== 'All' ? `Category: ${categoryFilter}` : null,
               impactFilter !== 'All' ? `Impact: ${impactFilter}` : null,
               moodFilter !== 'All' ? `Tone: ${moodFilter}` : null,
               selectedPerson ? `Person: ${selectedPerson}` : null,
@@ -905,6 +1027,7 @@ export function MemoriesModule() {
           <button
             type="button"
             onClick={() => {
+              setCategoryFilter('All');
               setImpactFilter('All');
               setMoodFilter('All');
               setSelectedCollectionId(null);
@@ -958,8 +1081,6 @@ export function MemoriesModule() {
                       <div className="text-xs text-ink-muted font-mono tabular-nums flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                         <span>{m.memoryDate}</span>
                         <span aria-hidden="true">·</span>
-                        <span>{m.category}</span>
-                        <span aria-hidden="true">·</span>
                         <span>{m.sentimentTone || m.mood}</span>
                         {m.emotionalImpact && (
                           <>
@@ -992,7 +1113,30 @@ export function MemoriesModule() {
                     </div>
                     <h3 className="font-display text-lg font-semibold text-ink">{m.title}</h3>
                     <p className="text-sm text-ink-secondary line-clamp-3 leading-relaxed">{m.content}</p>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-muted pt-1">
+                    <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs text-ink-muted pt-1">
+                      {(() => {
+                        const catStyle = getCategoryStyle(m.category);
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCategoryFilter(
+                                categoryFilter.toLowerCase() === m.category.toLowerCase() ? 'All' : m.category
+                              );
+                            }}
+                            title={`Filter by ${m.category}`}
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors ${catStyle.badgeClass}`}
+                          >
+                            <span
+                              className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{ backgroundColor: catStyle.dotHex }}
+                              aria-hidden="true"
+                            />
+                            {m.category}
+                          </button>
+                        );
+                      })()}
                       {m.locationName && (
                         <span className="inline-flex items-center gap-1">
                           <MapPin className="w-3 h-3 text-sky-500 dark:text-sky-400" /> {m.locationName}
@@ -1028,11 +1172,26 @@ export function MemoriesModule() {
           {activeMemory && (
             <aside className="lg:col-span-5 rounded-2xl border border-hairline bg-surface p-6 space-y-5 h-fit lg:sticky lg:top-6">
               <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-xs text-sky-700 dark:text-sky-300 font-mono tabular-nums">
-                    {activeMemory.memoryDate} · {activeMemory.category} · {activeMemory.sentimentTone || activeMemory.mood}
+                <div className="space-y-1.5">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-sky-700 dark:text-sky-300 font-mono tabular-nums">
+                    <span>{activeMemory.memoryDate} · {activeMemory.sentimentTone || activeMemory.mood}</span>
+                    {(() => {
+                      const catStyle = getCategoryStyle(activeMemory.category);
+                      return (
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-sans text-[11px] font-medium ${catStyle.badgeClass}`}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{ backgroundColor: catStyle.dotHex }}
+                            aria-hidden="true"
+                          />
+                          {activeMemory.category}
+                        </span>
+                      );
+                    })()}
                   </div>
-                  <h2 className="font-display text-2xl font-bold text-ink mt-1">{activeMemory.title}</h2>
+                  <h2 className="font-display text-2xl font-bold text-ink">{activeMemory.title}</h2>
                 </div>
                 <button
                   type="button"
@@ -1127,9 +1286,58 @@ export function MemoriesModule() {
                 </div>
               )}
 
-              <div className="space-y-2.5 text-xs text-ink-muted border-t border-hairline pt-4">
+              <div className="space-y-3 text-xs text-ink-muted border-t border-hairline pt-4">
                 {activeMemory.locationName && <div>Location: {activeMemory.locationName}</div>}
                 {activeMemory.people.length > 0 && <div>People: {activeMemory.people.join(', ')}</div>}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-medium text-ink-secondary">Category</span>
+                    {updatingCategoryId === activeMemory.id && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-ink-muted">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Updating...
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {PRIMARY_CATEGORIES.map((cat) => {
+                      const style = getCategoryStyle(cat);
+                      const isCurrent = activeMemory.category.toLowerCase() === cat.toLowerCase();
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          disabled={updatingCategoryId === activeMemory.id}
+                          onClick={() => void handleUpdateMemoryCategory(activeMemory.id, cat)}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors disabled:opacity-50 ${
+                            isCurrent ? style.activeClass : style.badgeClass
+                          }`}
+                        >
+                          <span
+                            className="w-1.5 h-1.5 rounded-full shrink-0"
+                            style={{ backgroundColor: style.dotHex }}
+                            aria-hidden="true"
+                          />
+                          {cat}
+                        </button>
+                      );
+                    })}
+                    <select
+                      aria-label="Choose category"
+                      value={
+                        availableCategories.find(
+                          (c) => c.toLowerCase() === activeMemory.category.toLowerCase()
+                        ) || activeMemory.category
+                      }
+                      disabled={updatingCategoryId === activeMemory.id}
+                      onChange={(e) => void handleUpdateMemoryCategory(activeMemory.id, e.target.value)}
+                      className="rounded-full border border-hairline-strong bg-inset px-2.5 py-1 text-[11px] text-ink-secondary focus:outline-none"
+                    >
+                      {availableCategories.map((c) => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <div className="font-medium text-ink-secondary">Tags</div>
                   <div className="flex flex-wrap gap-1.5">
@@ -1694,30 +1902,62 @@ export function MemoriesModule() {
                       className="rounded-xl border border-hairline bg-inset p-3 space-y-2"
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
+                        <div className="min-w-0 space-y-1">
                           <div className="text-xs font-semibold text-ink truncate">{m.title}</div>
-                          <div className="text-[11px] font-mono text-ink-muted tabular-nums">
-                            {m.memoryDate} · {m.category}
+                          <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-mono text-ink-muted tabular-nums">
+                            <span>{m.memoryDate}</span>
+                            {(() => {
+                              const catStyle = getCategoryStyle(m.category);
+                              return (
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-sans text-[10px] font-medium ${catStyle.badgeClass}`}
+                                >
+                                  <span
+                                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                                    style={{ backgroundColor: catStyle.dotHex }}
+                                    aria-hidden="true"
+                                  />
+                                  {m.category}
+                                </span>
+                              );
+                            })()}
                           </div>
                         </div>
-                        {cleanAssign && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const nextTags = hasActiveTag
-                                ? m.tags.filter((t) => t.toLowerCase() !== cleanAssign.toLowerCase())
-                                : [...m.tags, cleanAssign];
-                              void handleUpdateMemoryTags(m.id, nextTags);
-                            }}
-                            className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold shrink-0 transition-colors ${
-                              hasActiveTag
-                                ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-700 dark:text-emerald-200'
-                                : 'bg-sky-400 text-slate-950 hover:bg-sky-300'
-                            }`}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <select
+                            aria-label={`Category for ${m.title}`}
+                            value={
+                              availableCategories.find(
+                                (c) => c.toLowerCase() === m.category.toLowerCase()
+                              ) || m.category
+                            }
+                            disabled={updatingCategoryId === m.id}
+                            onChange={(e) => void handleUpdateMemoryCategory(m.id, e.target.value)}
+                            className="rounded-lg border border-hairline-strong bg-surface px-2 py-1 text-[11px] text-ink-secondary focus:outline-none max-w-[120px]"
                           >
-                            {hasActiveTag ? `✓ #${cleanAssign}` : `+ #${cleanAssign}`}
-                          </button>
-                        )}
+                            {availableCategories.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                          {cleanAssign && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const nextTags = hasActiveTag
+                                  ? m.tags.filter((t) => t.toLowerCase() !== cleanAssign.toLowerCase())
+                                  : [...m.tags, cleanAssign];
+                                void handleUpdateMemoryTags(m.id, nextTags);
+                              }}
+                              className={`rounded-lg px-2.5 py-1 text-[11px] font-semibold shrink-0 transition-colors ${
+                                hasActiveTag
+                                  ? 'bg-emerald-500/20 border border-emerald-500/40 text-emerald-700 dark:text-emerald-200'
+                                  : 'bg-sky-400 text-slate-950 hover:bg-sky-300'
+                              }`}
+                            >
+                              {hasActiveTag ? `✓ #${cleanAssign}` : `+ #${cleanAssign}`}
+                            </button>
+                          )}
+                        </div>
                       </div>
                       {m.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1">
@@ -1927,18 +2167,45 @@ export function MemoriesModule() {
                 </select>
               </div>
 
-              <div>
-                <label className="text-xs text-ink-muted block mb-1">Category</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className="w-full rounded-xl border border-hairline-strong bg-inset px-3 py-2 text-sm text-ink"
-                >
-                  {DEFAULT_CATEGORIES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                  <option value="Custom">Custom category...</option>
-                </select>
+              <div className="sm:col-span-2 space-y-2">
+                <label className="text-xs text-ink-muted block">Category Tag</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {availableCategories.map((c) => {
+                    const style = getCategoryStyle(c);
+                    const isSelected = category !== 'Custom' && category.toLowerCase() === c.toLowerCase();
+                    return (
+                      <button
+                        key={c}
+                        type="button"
+                        onClick={() => {
+                          setCategory(c);
+                          setCustomCategory('');
+                        }}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
+                          isSelected ? style.activeClass : style.badgeClass
+                        }`}
+                      >
+                        <span
+                          className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: style.dotHex }}
+                          aria-hidden="true"
+                        />
+                        {c}
+                      </button>
+                    );
+                  })}
+                  <button
+                    type="button"
+                    onClick={() => setCategory('Custom')}
+                    className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
+                      category === 'Custom'
+                        ? 'border-accent-border bg-accent-soft text-accent-text font-semibold'
+                        : 'border-hairline-strong bg-inset text-ink-secondary hover:text-ink'
+                    }`}
+                  >
+                    + Custom
+                  </button>
+                </div>
               </div>
 
               {category === 'Custom' ? (
