@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="echo_canvas">#0A0812</color>
+    <color name="echo_accent">#E11D48</color>
+    <color name="echo_secondary">#7C3AED</color>
+</resources>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.EchoApp" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:statusBarColor">@color/echo_canvas</item>
+        <item name="android:navigationBarColor">@color/echo_canvas</item>
+        <item name="android:windowBackground">@color/echo_canvas</item>
+        <item name="colorAccent">@color/echo_accent</item>
+    </style>
+</resources>

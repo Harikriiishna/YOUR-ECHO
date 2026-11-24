@@ -11,6 +11,7 @@ import {
   Link2,
   Loader2,
   MapPin,
+  Navigation,
   Play,
   Plus,
   Search,
@@ -26,6 +27,7 @@ import { useEcho } from '../context/EchoContext';
 import { apiRequest, readOfflineCache, saveOfflineCache } from '../lib/api';
 import type { MediaMeta, MemoryCollection, MemoryItem } from '../types/echo';
 import { AuthMedia, MediaPicker, VoiceRecorder } from './MediaElements';
+import { MemoriesMapView } from './MemoriesMapView';
 
 const DEFAULT_CATEGORIES = [
   'Childhood',
@@ -177,6 +179,7 @@ export function MemoriesModule() {
   const [analyzingDraftSentiment, setAnalyzingDraftSentiment] = useState(false);
   const [attachedMedia, setAttachedMedia] = useState<MediaMeta[]>([]);
   const [aiBusy, setAiBusy] = useState(false);
+  const [locatingGps, setLocatingGps] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -620,11 +623,6 @@ export function MemoriesModule() {
     return cells;
   }, [calendarMonth, memories]);
 
-  const mappedMemories = useMemo(
-    () => memories.filter((m) => m.locationName || (m.latitude !== null && m.longitude !== null)),
-    [memories]
-  );
-
   return (
     <div className="space-y-5 min-w-0 w-full">
       {/* Header & Primary Controls */}
@@ -682,7 +680,7 @@ export function MemoriesModule() {
             { id: 'timeline', label: 'Timeline' },
             { id: 'calendar', label: 'Calendar' },
             { id: 'collections', label: 'Collections' },
-            { id: 'map', label: 'Memory Map' },
+            { id: 'map', label: 'Map' },
             { id: 'people', label: 'People' },
             { id: 'tags', label: `Tags (${allTagsDirectory.length})` },
           ].map((tab) => (
@@ -1376,60 +1374,22 @@ export function MemoriesModule() {
         </div>
       )}
 
-      {/* VIEW: MEMORY MAP */}
+      {/* VIEW: MAP (LEAFLET) */}
       {view === 'map' && (
-        <div className="rounded-2xl border border-hairline bg-surface p-4 sm:p-6 space-y-5 overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="font-display text-lg font-semibold text-ink">Memory Map</h2>
-              <p className="text-xs text-ink-muted">Places attached to your memories across the globe.</p>
-            </div>
-            <span className="text-xs font-mono text-sky-700 dark:text-sky-300 tabular-nums">{mappedMemories.length} located</span>
-          </div>
-
-          <div className="relative rounded-xl border border-hairline bg-[#070B14] overflow-hidden p-2 sm:p-4">
-            <svg viewBox="0 0 800 360" className="w-full h-44 sm:h-80 block">
-              <defs>
-                <radialGradient id="mapGlow" cx="50%" cy="50%" r="60%">
-                  <stop offset="0%" stopColor="#1E3A5F" stopOpacity="0.45" />
-                  <stop offset="100%" stopColor="#070B14" stopOpacity="0" />
-                </radialGradient>
-              </defs>
-              <rect width="800" height="360" fill="url(#mapGlow)" />
-              {/* Subtle latitude / longitude grid */}
-              {[-60, -30, 0, 30, 60].map((lat) => {
-                const y = ((90 - lat) / 180) * 360;
-                return <line key={lat} x1="0" y1={y} x2="800" y2={y} stroke="rgba(148,163,184,0.12)" strokeDasharray="4 4" />;
-              })}
-              {[-120, -60, 0, 60, 120].map((lng) => {
-                const x = ((lng + 180) / 360) * 800;
-                return <line key={lng} x1={x} y1="0" x2={x} y2="360" stroke="rgba(148,163,184,0.12)" strokeDasharray="4 4" />;
-              })}
-              {mappedMemories.map((m, idx) => {
-                const lat = m.latitude ?? ((idx * 37) % 100) - 45;
-                const lng = m.longitude ?? ((idx * 73) % 280) - 140;
-                const x = ((lng + 180) / 360) * 800;
-                const y = ((90 - lat) / 180) * 360;
-                return (
-                  <g
-                    key={m.id}
-                    className="touch-manipulation cursor-pointer"
-                    onClick={() => {
-                      setActiveMemory(m);
-                      setView('timeline');
-                    }}
-                  >
-                    <circle cx={x} cy={y} r="9" fill="rgba(56,189,248,0.22)" />
-                    <circle cx={x} cy={y} r="4.5" fill="#38BDF8" />
-                    <text x={x + 9} y={y + 4} fill="#E2E8F0" fontSize="10" fontFamily="DM Sans, sans-serif">
-                      {m.locationName || m.title}
-                    </text>
-                  </g>
-                );
-              })}
-            </svg>
-          </div>
-        </div>
+        <MemoriesMapView
+          memories={memories}
+          onOpenMemory={(m) => {
+            setActiveMemory(m);
+            setView('timeline');
+          }}
+          onCreateMemory={openNewEditor}
+          onMemoryUpdated={(updated) => {
+            setMemories((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+            if (activeMemory?.id === updated.id) {
+              setActiveMemory(updated);
+            }
+          }}
+        />
       )}
 
       {/* VIEW: PEOPLE CONNECTED TO MEMORIES */}
@@ -2019,26 +1979,59 @@ export function MemoriesModule() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-xs text-ink-muted block mb-1">Lat (optional)</label>
+              <div>
+                <div className="flex items-center justify-between gap-2 mb-1">
+                  <label className="text-xs text-ink-muted">Coordinates (optional)</label>
+                  <button
+                    type="button"
+                    disabled={locatingGps}
+                    onClick={() => {
+                      if (!navigator.geolocation) {
+                        setError('Geolocation is not supported in this browser.');
+                        return;
+                      }
+                      setLocatingGps(true);
+                      setError(null);
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                          setLatitude(pos.coords.latitude.toFixed(5));
+                          setLongitude(pos.coords.longitude.toFixed(5));
+                          setLocatingGps(false);
+                        },
+                        (geoErr) => {
+                          setError(geoErr.message || 'Unable to detect GPS coordinates.');
+                          setLocatingGps(false);
+                        },
+                        { enableHighAccuracy: true, timeout: 10000 }
+                      );
+                    }}
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-accent-text hover:underline disabled:opacity-40"
+                  >
+                    {locatingGps ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Navigation className="w-3 h-3" />
+                    )}
+                    {locatingGps ? 'Locating...' : 'Use GPS'}
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
                   <input
                     type="number"
                     step="any"
                     value={latitude}
                     onChange={(e) => setLatitude(e.target.value)}
                     placeholder="Latitude"
+                    aria-label="Latitude"
                     className="w-full rounded-xl border border-hairline-strong bg-inset px-3 py-2 text-sm text-ink font-mono"
                   />
-                </div>
-                <div>
-                  <label className="text-xs text-ink-muted block mb-1">Lng (optional)</label>
                   <input
                     type="number"
                     step="any"
                     value={longitude}
                     onChange={(e) => setLongitude(e.target.value)}
                     placeholder="Longitude"
+                    aria-label="Longitude"
                     className="w-full rounded-xl border border-hairline-strong bg-inset px-3 py-2 text-sm text-ink font-mono"
                   />
                 </div>

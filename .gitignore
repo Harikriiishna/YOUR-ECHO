@@ -8,4 +8,8 @@ coverage/
 !.env.example
 data/
 uploads/
+.gradle/
+app/build/
+local.properties
+debug.keystore
 
