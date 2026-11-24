@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ECHO — Connection Offline</title>
+    <title>ECHO — Server Diagnostics</title>
     <style>
       :root {
         color-scheme: dark;
@@ -26,22 +26,45 @@
       }
       .card {
         width: 100%;
-        max-width: 400px;
+        max-width: 420px;
         border-radius: 20px;
         padding: 24px;
         background: #141022;
         border: 1px solid rgba(244, 114, 182, 0.2);
       }
+      .badge {
+        display: inline-block;
+        margin-bottom: 12px;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        background: rgba(225, 29, 72, 0.16);
+        color: #fda4af;
+        border: 1px solid rgba(225, 29, 72, 0.35);
+      }
       h1 {
         margin: 0 0 8px;
-        font-size: 22px;
+        font-size: 21px;
         font-weight: 700;
       }
       p {
-        margin: 0 0 18px;
+        margin: 0 0 14px;
         font-size: 14px;
         line-height: 1.5;
         color: #cbd5e1;
+      }
+      .url-box {
+        margin: 0 0 18px;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: #0d0a18;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        font-family: ui-monospace, SFMono-Regular, monospace;
+        font-size: 12px;
+        line-height: 1.4;
+        color: #94a3b8;
+        word-break: break-all;
       }
       .actions {
         display: flex;
@@ -71,10 +94,12 @@
   </head>
   <body>
     <main class="card">
-      <h1>Unable to reach ECHO</h1>
-      <p>
+      <div id="status-badge" class="badge" hidden></div>
+      <h1 id="err-title">Unable to reach ECHO</h1>
+      <p id="err-detail">
         Check your internet connection or update the ECHO server address if you are connecting to a self-hosted instance.
       </p>
+      <div id="err-url" class="url-box" hidden></div>
       <div class="actions">
         <button class="primary" type="button" onclick="window.EchoAndroid && window.EchoAndroid.retry()">
           Retry Connection
@@ -84,5 +109,37 @@
         </button>
       </div>
     </main>
+    <script>
+      (function () {
+        if (!window.EchoAndroid || !window.EchoAndroid.getLastErrorJson) {
+          return;
+        }
+        try {
+          var info = JSON.parse(window.EchoAndroid.getLastErrorJson());
+          var badgeEl = document.getElementById('status-badge');
+          var titleEl = document.getElementById('err-title');
+          var detailEl = document.getElementById('err-detail');
+          var urlEl = document.getElementById('err-url');
+
+          if (info.statusCode && Number(info.statusCode) > 0) {
+            badgeEl.textContent = 'HTTP ' + info.statusCode;
+            badgeEl.hidden = false;
+          }
+          if (info.title) {
+            titleEl.textContent = info.title;
+          }
+          if (info.detail) {
+            detailEl.textContent = info.detail;
+          }
+          var displayUrl = info.url || (window.EchoAndroid.getServerUrl && window.EchoAndroid.getServerUrl()) || '';
+          if (displayUrl) {
+            urlEl.textContent = 'Target: ' + displayUrl;
+            urlEl.hidden = false;
+          }
+        } catch (err) {
+          // Keep default fallback message
+        }
+      })();
+    </script>
   </body>
 </html>

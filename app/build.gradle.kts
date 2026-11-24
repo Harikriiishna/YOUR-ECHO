@@ -12,6 +12,16 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0.0"
+
+        val rawServerUrl = ((project.findProperty("ECHO_SERVER_URL") as String?)
+            ?: System.getenv("ECHO_SERVER_URL")
+            ?: "")
+            .trim()
+            .trimEnd('/')
+        val defaultServerUrl = rawServerUrl
+            .ifEmpty { "https://ais-pre-2yzod2n5xijkorfgbkbt7x-6611368983.asia-southeast1.run.app" }
+            .replace("\"", "")
+        resValue("string", "default_server_url", defaultServerUrl)
     }
 
     signingConfigs {

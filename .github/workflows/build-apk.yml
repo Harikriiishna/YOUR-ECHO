@@ -149,17 +149,9 @@ jobs:
           fi
 
       - name: Build debug APK
-        run: |
-          set -euo pipefail
-          echo "ANDROID_HOME=${ANDROID_HOME:-}"
-          echo "ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-}"
-          if [ -x ./gradlew ]; then
-            ./gradlew --version
-            ./gradlew :app:assembleDebug --stacktrace --no-daemon
-          else
-            gradle --version
-            gradle :app:assembleDebug --stacktrace --no-daemon
-          fi
+        env:
+          ECHO_SERVER_URL: ${{ vars.ECHO_SERVER_URL }}
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
 
       - name: Verify debug APK
         run: |
@@ -239,7 +231,7 @@ jobs:
           fi
 
           NOTES_FILE=$(mktemp "${RUNNER_TEMP:-/tmp}/release-notes-XXXXXX.md")
-          cat <<EOF > "$NOTES_FILE"
+          cat <<EOF | sed 's/^          //' > "$NOTES_FILE"
           This is an automatically generated debug APK built by GitHub Actions.
 
           - **Workflow Run:** #${RUN_NUMBER} (Attempt ${RUN_ATTEMPT})

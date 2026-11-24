@@ -6,22 +6,27 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.net.http.SslError;
 import android.os.Bundle;
 import android.text.InputType;
+import android.util.Log;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.GeolocationPermissions;
 import android.webkit.JavascriptInterface;
 import android.webkit.PermissionRequest;
+import android.webkit.SslErrorHandler;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.Toast;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
@@ -29,17 +34,30 @@ import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final String TAG = "EchoWebView";
     private static final String PREFS_NAME = "echo_android_prefs";
     private static final String KEY_SERVER_URL = "server_url";
+    private static final String OFFLINE_ASSET_URL = "file:///android_asset/offline.html";
 
     private WebView webView;
     private ValueCallback<Uri[]> pendingFileCallback;
     private PermissionRequest pendingWebPermission;
     private String pendingGeoOrigin;
     private GeolocationPermissions.Callback pendingGeoCallback;
+
+    private volatile String lastErrorTitle = "Unable to reach ECHO";
+    private volatile String lastErrorDetail = "Check your internet connection or update the ECHO server URL.";
+    private volatile String lastErrorUrl = "";
+    private volatile int lastErrorStatus = 0;
 
     private final ActivityResultLauncher<Intent> fileChooserLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -80,12 +98,21 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        FrameLayout rootContainer = new FrameLayout(this);
+        rootContainer.setBackgroundColor(ContextCompat.getColor(this, R.color.echo_canvas));
+
         webView = new WebView(this);
-        webView.setLayoutParams(new FrameLayout.LayoutParams(
+        rootContainer.addView(webView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT
         ));
-        setContentView(webView);
+        setContentView(rootContainer);
+
+        ViewCompat.setOnApplyWindowInsetsListener(rootContainer, (view, windowInsets) -> {
+            Insets bars = windowInsets.getInsets(WindowInsetsCompat.Type.systemBars());
+            view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            return WindowInsetsCompat.CONSUMED;
+        });
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -94,6 +121,7 @@ public class MainActivity extends AppCompatActivity {
         settings.setAllowFileAccess(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setGeolocationEnabled(true);
+        settings.setCacheMode(WebSettings.LOAD_DEFAULT);
 
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
@@ -106,6 +134,9 @@ public class MainActivity extends AppCompatActivity {
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri target = request.getUrl();
                 String scheme = target.getScheme();
+                if ("file".equalsIgnoreCase(scheme)) {
+                    return false;
+                }
                 if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
                     openExternal(target);
                     return true;
@@ -124,9 +155,83 @@ public class MainActivity extends AppCompatActivity {
                     WebResourceRequest request,
                     WebResourceError error
             ) {
-                if (request.isForMainFrame()) {
-                    view.loadUrl("file:///android_asset/offline.html");
+                if (request == null || !request.isForMainFrame()) {
+                    return;
                 }
+                Uri reqUrl = request.getUrl();
+                if (reqUrl != null && "file".equalsIgnoreCase(reqUrl.getScheme())) {
+                    return;
+                }
+                String safeUrl = sanitizeUrlForDisplay(reqUrl);
+                int errorCode = error != null ? error.getErrorCode() : -1;
+                CharSequence descSeq = error != null ? error.getDescription() : null;
+                String desc = (descSeq != null && descSeq.length() > 0)
+                        ? descSeq.toString()
+                        : "Network connection failed";
+                Log.e(TAG, "Main-frame load error (" + errorCode + ": " + desc + ") at " + safeUrl);
+                showErrorFallback(
+                        view,
+                        "Unable to reach ECHO server",
+                        "Network error (" + desc + "). Check your connection or update the Server URL to a live ECHO deployment.",
+                        safeUrl,
+                        0
+                );
+            }
+
+            @Override
+            public void onReceivedHttpError(
+                    WebView view,
+                    WebResourceRequest request,
+                    WebResourceResponse errorResponse
+            ) {
+                if (request == null || !request.isForMainFrame() || errorResponse == null) {
+                    return;
+                }
+                Uri reqUrl = request.getUrl();
+                if (reqUrl != null && "file".equalsIgnoreCase(reqUrl.getScheme())) {
+                    return;
+                }
+                int statusCode = errorResponse.getStatusCode();
+                if (statusCode < 400) {
+                    return;
+                }
+                String safeUrl = sanitizeUrlForDisplay(reqUrl);
+                String reason = errorResponse.getReasonPhrase();
+                if (reason == null || reason.trim().isEmpty()) {
+                    reason = statusCode == 404 ? "Page not found" : "HTTP error";
+                }
+                Log.e(TAG, "Main-frame HTTP " + statusCode + " (" + reason + ") at " + safeUrl);
+                String detail = statusCode == 404
+                        ? "The server returned HTTP 404 (Page not found) for this address. "
+                          + "Deploy/publish the ECHO server at this URL, or tap Server URL to connect to your live ECHO instance."
+                        : "The server returned HTTP " + statusCode + " (" + reason + ").";
+                showErrorFallback(
+                        view,
+                        "Server Error (HTTP " + statusCode + ")",
+                        detail,
+                        safeUrl,
+                        statusCode
+                );
+            }
+
+            @Override
+            public void onReceivedSslError(
+                    WebView view,
+                    SslErrorHandler handler,
+                    SslError error
+            ) {
+                handler.cancel();
+                String rawUrl = error != null ? error.getUrl() : getConfiguredServerUrl();
+                String safeUrl = sanitizeUrlForDisplay(rawUrl != null ? Uri.parse(rawUrl) : null);
+                int primaryError = error != null ? error.getPrimaryError() : -1;
+                Log.e(TAG, "SSL verification error (" + primaryError + ") at " + safeUrl);
+                showErrorFallback(
+                        view,
+                        "Secure Connection Failed",
+                        "SSL certificate verification failed (code " + primaryError + "). Verify HTTPS on your ECHO server or update Server URL.",
+                        safeUrl,
+                        0
+                );
             }
         });
 
@@ -204,7 +309,7 @@ public class MainActivity extends AppCompatActivity {
         if (savedInstanceState != null) {
             webView.restoreState(savedInstanceState);
         } else {
-            webView.loadUrl(getConfiguredServerUrl());
+            loadConfiguredServer(false);
         }
     }
 
@@ -222,13 +327,72 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
+    private void showErrorFallback(
+            WebView view,
+            String title,
+            String detail,
+            String url,
+            int statusCode
+    ) {
+        lastErrorTitle = title;
+        lastErrorDetail = detail;
+        lastErrorUrl = url != null ? url : "";
+        lastErrorStatus = statusCode;
+        view.stopLoading();
+        view.loadUrl(OFFLINE_ASSET_URL);
+    }
+
+    private void loadConfiguredServer(boolean clearCache) {
+        if (clearCache) {
+            webView.clearCache(false);
+        }
+        String url = getConfiguredServerUrl();
+        Log.i(TAG, "Loading configured ECHO server: " + sanitizeUrlForDisplay(Uri.parse(url)));
+        webView.loadUrl(url);
+    }
+
     private String getConfiguredServerUrl() {
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         String saved = prefs.getString(KEY_SERVER_URL, null);
         if (saved == null || saved.trim().isEmpty()) {
-            return getString(R.string.default_server_url);
+            return normalizeServerUrl(getString(R.string.default_server_url));
         }
-        return saved.trim();
+        String normalized = normalizeServerUrl(saved);
+        return normalized != null ? normalized : getString(R.string.default_server_url);
+    }
+
+    private String normalizeServerUrl(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String trimmed = raw.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+            trimmed = "https://" + trimmed;
+        }
+        while (trimmed.endsWith("/") && trimmed.length() > "https://".length()) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        Uri parsed = Uri.parse(trimmed);
+        if (parsed.getHost() == null || parsed.getHost().trim().isEmpty()) {
+            return null;
+        }
+        return trimmed;
+    }
+
+    private String sanitizeUrlForDisplay(Uri uri) {
+        if (uri == null) {
+            return "";
+        }
+        String scheme = uri.getScheme();
+        String authority = uri.getAuthority();
+        String path = uri.getPath();
+        if (scheme == null || authority == null) {
+            return uri.toString();
+        }
+        return scheme + "://" + authority + (path != null ? path : "");
     }
 
     private void showServerUrlDialog() {
@@ -242,21 +406,23 @@ public class MainActivity extends AppCompatActivity {
                 .setMessage("Enter the HTTPS or local URL where your ECHO server is running.")
                 .setView(input)
                 .setPositiveButton("Connect", (dialog, which) -> {
-                    String entered = input.getText().toString().trim();
-                    if (!entered.isEmpty()) {
-                        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-                                .edit()
-                                .putString(KEY_SERVER_URL, entered)
-                                .apply();
-                        webView.loadUrl(entered);
+                    String normalized = normalizeServerUrl(input.getText().toString());
+                    if (normalized == null) {
+                        Toast.makeText(this, "Enter a valid http:// or https:// server URL.", Toast.LENGTH_SHORT).show();
+                        return;
                     }
+                    getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                            .edit()
+                            .putString(KEY_SERVER_URL, normalized)
+                            .apply();
+                    loadConfiguredServer(true);
                 })
                 .setNeutralButton("Reset Default", (dialog, which) -> {
                     getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                             .edit()
                             .remove(KEY_SERVER_URL)
                             .apply();
-                    webView.loadUrl(getString(R.string.default_server_url));
+                    loadConfiguredServer(true);
                 })
                 .setNegativeButton("Cancel", null)
                 .show();
@@ -273,12 +439,31 @@ public class MainActivity extends AppCompatActivity {
     public class EchoBridge {
         @JavascriptInterface
         public void retry() {
-            runOnUiThread(() -> webView.loadUrl(getConfiguredServerUrl()));
+            runOnUiThread(() -> loadConfiguredServer(true));
         }
 
         @JavascriptInterface
         public void configureServer() {
             runOnUiThread(MainActivity.this::showServerUrlDialog);
+        }
+
+        @JavascriptInterface
+        public String getServerUrl() {
+            return sanitizeUrlForDisplay(Uri.parse(getConfiguredServerUrl()));
+        }
+
+        @JavascriptInterface
+        public String getLastErrorJson() {
+            JSONObject obj = new JSONObject();
+            try {
+                obj.put("title", lastErrorTitle);
+                obj.put("detail", lastErrorDetail);
+                obj.put("url", lastErrorUrl);
+                obj.put("statusCode", lastErrorStatus);
+            } catch (JSONException ignored) {
+                // Keep empty JSON object fallback
+            }
+            return obj.toString();
         }
     }
 }
