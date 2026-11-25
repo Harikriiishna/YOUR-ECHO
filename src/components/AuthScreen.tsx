@@ -331,6 +331,26 @@ export function AuthScreen() {
               <ArrowRight className="w-4 h-4" />
             </button>
           </form>
+
+          {typeof window !== 'undefined' &&
+            Boolean((window as unknown as { EchoAndroid?: { configureServer?: () => void } }).EchoAndroid?.configureServer) && (
+              <div className="pt-3 border-t border-hairline flex items-center justify-between gap-2 text-[11px] text-ink-muted">
+                <span>
+                  {window.location.hostname === 'echo.local'
+                    ? 'On-Device Mode (saved locally)'
+                    : 'Connected to ECHO server'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    (window as unknown as { EchoAndroid?: { configureServer?: () => void } }).EchoAndroid?.configureServer?.()
+                  }
+                  className="font-medium text-accent-text hover:underline whitespace-nowrap shrink-0"
+                >
+                  Server URL
+                </button>
+              </div>
+            )}
         </div>
       </div>
     </div>

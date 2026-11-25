@@ -41,12 +41,22 @@ import androidx.core.view.WindowInsetsCompat;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Locale;
+import java.util.Map;
+
 public class MainActivity extends AppCompatActivity {
 
     private static final String TAG = "EchoWebView";
     private static final String PREFS_NAME = "echo_android_prefs";
     private static final String KEY_SERVER_URL = "server_url";
     private static final String OFFLINE_ASSET_URL = "file:///android_asset/offline.html";
+    private static final String LOCAL_APP_HOST = "echo.local";
+    private static final String LOCAL_APP_URL = "https://" + LOCAL_APP_HOST + "/index.html";
 
     private WebView webView;
     private ValueCallback<Uri[]> pendingFileCallback;
@@ -58,6 +68,7 @@ public class MainActivity extends AppCompatActivity {
     private volatile String lastErrorDetail = "Check your internet connection or update the ECHO server URL.";
     private volatile String lastErrorUrl = "";
     private volatile int lastErrorStatus = 0;
+    private volatile boolean standaloneActive = false;
 
     private final ActivityResultLauncher<Intent> fileChooserLauncher =
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
@@ -131,10 +142,22 @@ public class MainActivity extends AppCompatActivity {
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                if (request != null && request.getUrl() != null
+                        && LOCAL_APP_HOST.equalsIgnoreCase(request.getUrl().getHost())) {
+                    return serveBundledWebAsset(request.getUrl());
+                }
+                return super.shouldInterceptRequest(view, request);
+            }
+
+            @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri target = request.getUrl();
                 String scheme = target.getScheme();
                 if ("file".equalsIgnoreCase(scheme)) {
+                    return false;
+                }
+                if (LOCAL_APP_HOST.equalsIgnoreCase(target.getHost())) {
                     return false;
                 }
                 if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
@@ -159,7 +182,8 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
                 Uri reqUrl = request.getUrl();
-                if (reqUrl != null && "file".equalsIgnoreCase(reqUrl.getScheme())) {
+                if (reqUrl != null && ("file".equalsIgnoreCase(reqUrl.getScheme())
+                        || LOCAL_APP_HOST.equalsIgnoreCase(reqUrl.getHost()))) {
                     return;
                 }
                 String safeUrl = sanitizeUrlForDisplay(reqUrl);
@@ -169,10 +193,15 @@ public class MainActivity extends AppCompatActivity {
                         ? descSeq.toString()
                         : "Network connection failed";
                 Log.e(TAG, "Main-frame load error (" + errorCode + ": " + desc + ") at " + safeUrl);
+                if (!hasCustomServerUrl() && hasBundledWebApp()) {
+                    view.stopLoading();
+                    loadLocalStandaloneApp();
+                    return;
+                }
                 showErrorFallback(
                         view,
                         "Unable to reach ECHO server",
-                        "Network error (" + desc + "). Check your connection or update the Server URL to a live ECHO deployment.",
+                        "Network error (" + desc + "). Check your connection, update the Server URL, or continue in On-Device Mode.",
                         safeUrl,
                         0
                 );
@@ -188,7 +217,8 @@ public class MainActivity extends AppCompatActivity {
                     return;
                 }
                 Uri reqUrl = request.getUrl();
-                if (reqUrl != null && "file".equalsIgnoreCase(reqUrl.getScheme())) {
+                if (reqUrl != null && ("file".equalsIgnoreCase(reqUrl.getScheme())
+                        || LOCAL_APP_HOST.equalsIgnoreCase(reqUrl.getHost()))) {
                     return;
                 }
                 int statusCode = errorResponse.getStatusCode();
@@ -201,9 +231,14 @@ public class MainActivity extends AppCompatActivity {
                     reason = statusCode == 404 ? "Page not found" : "HTTP error";
                 }
                 Log.e(TAG, "Main-frame HTTP " + statusCode + " (" + reason + ") at " + safeUrl);
+                if (!hasCustomServerUrl() && hasBundledWebApp()) {
+                    view.stopLoading();
+                    loadLocalStandaloneApp();
+                    return;
+                }
                 String detail = statusCode == 404
                         ? "The server returned HTTP 404 (Page not found) for this address. "
-                          + "Deploy/publish the ECHO server at this URL, or tap Server URL to connect to your live ECHO instance."
+                          + "Deploy/publish the ECHO server at this URL, tap Server URL, or switch to On-Device Mode."
                         : "The server returned HTTP " + statusCode + " (" + reason + ").";
                 showErrorFallback(
                         view,
@@ -222,13 +257,22 @@ public class MainActivity extends AppCompatActivity {
             ) {
                 handler.cancel();
                 String rawUrl = error != null ? error.getUrl() : getConfiguredServerUrl();
-                String safeUrl = sanitizeUrlForDisplay(rawUrl != null ? Uri.parse(rawUrl) : null);
+                Uri parsedRaw = rawUrl != null ? Uri.parse(rawUrl) : null;
+                if (parsedRaw != null && LOCAL_APP_HOST.equalsIgnoreCase(parsedRaw.getHost())) {
+                    return;
+                }
+                String safeUrl = sanitizeUrlForDisplay(parsedRaw);
                 int primaryError = error != null ? error.getPrimaryError() : -1;
                 Log.e(TAG, "SSL verification error (" + primaryError + ") at " + safeUrl);
+                if (!hasCustomServerUrl() && hasBundledWebApp()) {
+                    view.stopLoading();
+                    loadLocalStandaloneApp();
+                    return;
+                }
                 showErrorFallback(
                         view,
                         "Secure Connection Failed",
-                        "SSL certificate verification failed (code " + primaryError + "). Verify HTTPS on your ECHO server or update Server URL.",
+                        "SSL certificate verification failed (code " + primaryError + "). Verify HTTPS on your ECHO server or switch to On-Device Mode.",
                         safeUrl,
                         0
                 );
@@ -343,12 +387,116 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadConfiguredServer(boolean clearCache) {
+        standaloneActive = false;
         if (clearCache) {
             webView.clearCache(false);
         }
         String url = getConfiguredServerUrl();
         Log.i(TAG, "Loading configured ECHO server: " + sanitizeUrlForDisplay(Uri.parse(url)));
         webView.loadUrl(url);
+    }
+
+    private void loadLocalStandaloneApp() {
+        standaloneActive = true;
+        runOnUiThread(() -> {
+            Log.i(TAG, "Loading bundled on-device ECHO app at " + LOCAL_APP_URL);
+            webView.loadUrl(LOCAL_APP_URL);
+        });
+    }
+
+    private boolean hasBundledWebApp() {
+        try (InputStream is = getAssets().open("www/index.html")) {
+            return is != null;
+        } catch (IOException ex) {
+            return false;
+        }
+    }
+
+    private boolean hasCustomServerUrl() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String saved = prefs.getString(KEY_SERVER_URL, null);
+        return saved != null && !saved.trim().isEmpty();
+    }
+
+    private WebResourceResponse serveBundledWebAsset(Uri url) {
+        String rawPath = url.getPath();
+        if (rawPath == null || rawPath.isEmpty() || "/".equals(rawPath)) {
+            rawPath = "index.html";
+        } else if (rawPath.startsWith("/")) {
+            rawPath = rawPath.substring(1);
+        }
+        if (rawPath.contains("..")) {
+            return new WebResourceResponse(
+                    "text/plain",
+                    "UTF-8",
+                    400,
+                    "Bad Request",
+                    null,
+                    new ByteArrayInputStream("Invalid path".getBytes(StandardCharsets.UTF_8))
+            );
+        }
+        if (rawPath.startsWith("api/")) {
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Access-Control-Allow-Origin", "*");
+            return new WebResourceResponse(
+                    "application/json",
+                    "UTF-8",
+                    404,
+                    "Not Found",
+                    headers,
+                    new ByteArrayInputStream("{\"error\":\"On-device standalone mode\"}".getBytes(StandardCharsets.UTF_8))
+            );
+        }
+
+        String assetPath = "www/" + rawPath;
+        InputStream stream = null;
+        try {
+            stream = getAssets().open(assetPath);
+        } catch (IOException firstErr) {
+            if (!rawPath.contains(".")) {
+                try {
+                    rawPath = "index.html";
+                    stream = getAssets().open("www/index.html");
+                } catch (IOException ignored) {
+                    stream = null;
+                }
+            }
+        }
+
+        if (stream == null) {
+            return new WebResourceResponse(
+                    "text/plain",
+                    "UTF-8",
+                    404,
+                    "Not Found",
+                    null,
+                    new ByteArrayInputStream("Not found".getBytes(StandardCharsets.UTF_8))
+            );
+        }
+
+        String mimeType = guessMimeType(rawPath);
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Cache-Control", "no-cache");
+        headers.put("Access-Control-Allow-Origin", "*");
+        return new WebResourceResponse(mimeType, "UTF-8", 200, "OK", headers, stream);
+    }
+
+    private String guessMimeType(String path) {
+        String lower = path.toLowerCase(Locale.US);
+        if (lower.endsWith(".html") || lower.endsWith(".htm")) return "text/html";
+        if (lower.endsWith(".js") || lower.endsWith(".mjs")) return "application/javascript";
+        if (lower.endsWith(".css")) return "text/css";
+        if (lower.endsWith(".json")) return "application/json";
+        if (lower.endsWith(".svg")) return "image/svg+xml";
+        if (lower.endsWith(".png")) return "image/png";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
+        if (lower.endsWith(".webp")) return "image/webp";
+        if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".ico")) return "image/x-icon";
+        if (lower.endsWith(".woff2")) return "font/woff2";
+        if (lower.endsWith(".woff")) return "font/woff";
+        if (lower.endsWith(".ttf")) return "font/ttf";
+        return "application/octet-stream";
     }
 
     private String getConfiguredServerUrl() {
@@ -445,6 +593,27 @@ public class MainActivity extends AppCompatActivity {
         @JavascriptInterface
         public void configureServer() {
             runOnUiThread(MainActivity.this::showServerUrlDialog);
+        }
+
+        @JavascriptInterface
+        public void useOfflineMode() {
+            runOnUiThread(() -> {
+                if (hasBundledWebApp()) {
+                    loadLocalStandaloneApp();
+                } else {
+                    Toast.makeText(MainActivity.this, "On-device bundle is not included in this build.", Toast.LENGTH_SHORT).show();
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public boolean hasBundledApp() {
+            return hasBundledWebApp();
+        }
+
+        @JavascriptInterface
+        public boolean isStandaloneMode() {
+            return standaloneActive;
         }
 
         @JavascriptInterface

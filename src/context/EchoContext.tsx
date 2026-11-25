@@ -7,6 +7,7 @@ import {
   removeOfflineMutation,
   setAuthToken,
 } from '../lib/api';
+import { isStandaloneLocalMode } from '../lib/localStandaloneApi';
 import {
   applyThemeToDocument,
   type EchoThemeId,
@@ -263,6 +264,11 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
     }
 
     void refreshNotifications();
+
+    if (isStandaloneLocalMode()) {
+      setWsConnected(false);
+      return;
+    }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);

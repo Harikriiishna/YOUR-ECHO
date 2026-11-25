@@ -1,4 +1,10 @@
 import type { MediaMeta, PendingOfflineMutation } from '../types/echo';
+import {
+  handleStandaloneApiRequest,
+  isStandaloneLocalMode,
+  standaloneFetchMediaUrl,
+  standaloneUploadMedia,
+} from './localStandaloneApi';
 
 let inMemoryAuthToken: string | null = null;
 
@@ -11,6 +17,10 @@ export function getAuthToken(): string | null {
 }
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  if (isStandaloneLocalMode()) {
+    return handleStandaloneApiRequest<T>(path, options, inMemoryAuthToken);
+  }
+
   const headers = new Headers(options.headers || {});
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
@@ -46,6 +56,13 @@ export async function uploadMediaFile(
   contextType: string,
   onProgress?: (percent: number) => void
 ): Promise<MediaMeta> {
+  if (isStandaloneLocalMode()) {
+    onProgress?.(40);
+    const meta = await standaloneUploadMedia(file, filename);
+    onProgress?.(100);
+    return meta;
+  }
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/media/upload');
@@ -89,6 +106,10 @@ export async function uploadMediaFile(
 }
 
 export async function fetchProtectedMediaObjectUrl(mediaId: string): Promise<{ url: string; mimeType: string }> {
+  if (isStandaloneLocalMode()) {
+    return standaloneFetchMediaUrl(mediaId);
+  }
+
   const headers = new Headers({ 'X-Requested-With': 'ECHO' });
   if (inMemoryAuthToken) {
     headers.set('Authorization', `Bearer ${inMemoryAuthToken}`);

@@ -107,6 +107,9 @@
         <button class="secondary" type="button" onclick="window.EchoAndroid && window.EchoAndroid.configureServer()">
           Server URL
         </button>
+        <button id="offline-btn" class="secondary" type="button" hidden onclick="window.EchoAndroid && window.EchoAndroid.useOfflineMode()" style="flex-basis: 100%;">
+          Use On-Device App
+        </button>
       </div>
     </main>
     <script>
@@ -115,6 +118,10 @@
           return;
         }
         try {
+          if (window.EchoAndroid.hasBundledApp && window.EchoAndroid.hasBundledApp()) {
+            var offlineBtn = document.getElementById('offline-btn');
+            if (offlineBtn) offlineBtn.hidden = false;
+          }
           var info = JSON.parse(window.EchoAndroid.getLastErrorJson());
           var badgeEl = document.getElementById('status-badge');
           var titleEl = document.getElementById('err-title');
