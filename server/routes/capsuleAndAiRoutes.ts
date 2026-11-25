@@ -179,14 +179,30 @@ capsuleAndAiRouter.put('/capsules/:id', requireAuth, (req: AuthenticatedRequest,
     mediaIds?: string[];
   };
 
-  const nextUnlock = unlockAt ? new Date(unlockAt).toISOString() : String(existing.unlock_at);
+  const nextTitle = title !== undefined ? title.trim() : String(existing.title).trim();
+  const nextMessage = message !== undefined ? message.trim() : String(existing.message).trim();
+  if (!nextTitle || !nextMessage) {
+    res.status(400).json({ error: 'Capsule title and message cannot be empty.' });
+    return;
+  }
+
+  let nextUnlock = String(existing.unlock_at);
+  if (unlockAt !== undefined) {
+    const parsedUnlock = Date.parse(unlockAt);
+    if (!Number.isFinite(parsedUnlock)) {
+      res.status(400).json({ error: 'Invalid unlock date format.' });
+      return;
+    }
+    nextUnlock = new Date(parsedUnlock).toISOString();
+  }
+
   db.prepare(`
     UPDATE time_capsules
     SET title = ?, message = ?, capsule_type = ?, unlock_occasion = ?, unlock_at = ?, timezone = ?, media_ids_json = ?, updated_at = ?
     WHERE id = ? AND user_id = ?
   `).run(
-    (title ?? String(existing.title)).trim().slice(0, 160),
-    (message ?? String(existing.message)).trim(),
+    nextTitle.slice(0, 160),
+    nextMessage,
     capsuleType ?? String(existing.capsule_type),
     unlockOccasion ?? String(existing.unlock_occasion),
     nextUnlock,
@@ -296,16 +312,6 @@ capsuleAndAiRouter.post('/ai/query', requireAuth, rateLimit('ai', 20, 60_000), a
   }
 
   const cleanQ = question.trim().slice(0, 600);
-  const nowUser = new Date().toISOString();
-  db.prepare('INSERT INTO ai_conversations (id, user_id, module, role, content, sources_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
-    newId('ai'),
-    user.id,
-    'memory_ai',
-    'user',
-    cleanQ,
-    '[]',
-    nowUser
-  );
 
   try {
     const result = await runMemoryAiQuery(user.id, cleanQ);
@@ -317,17 +323,25 @@ capsuleAndAiRouter.post('/ai/query', requireAuth, rateLimit('ai', 20, 60_000), a
       .join('')
       .trim();
 
+    const nowUser = new Date().toISOString();
     const assistantId = newId('ai');
     const nowAi = new Date().toISOString();
-    db.prepare('INSERT INTO ai_conversations (id, user_id, module, role, content, sources_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(
-      assistantId,
-      user.id,
-      'memory_ai',
-      'assistant',
-      formatted,
-      JSON.stringify(result.sources),
-      nowAi
-    );
+
+    db.transaction(() => {
+      const insertStmt = db.prepare(
+        'INSERT INTO ai_conversations (id, user_id, module, role, content, sources_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+      );
+      insertStmt.run(newId('ai'), user.id, 'memory_ai', 'user', cleanQ, '[]', nowUser);
+      insertStmt.run(
+        assistantId,
+        user.id,
+        'memory_ai',
+        'assistant',
+        formatted,
+        JSON.stringify(result.sources),
+        nowAi
+      );
+    })();
 
     res.json({
       id: assistantId,

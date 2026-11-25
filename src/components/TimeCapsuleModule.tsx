@@ -94,7 +94,8 @@ export function TimeCapsuleModule() {
     setCapsuleType(c.capsuleType);
     setUnlockOccasion(c.unlockOccasion);
     const d = new Date(c.unlockAt);
-    setUnlockDateLocal(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    const safeDate = Number.isFinite(d.getTime()) ? d : new Date(Date.now() + 86400000 * 30);
+    setUnlockDateLocal(new Date(safeDate.getTime() - safeDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
     setAttachedMedia(c.media);
     setLockImmediately(false);
     setError(null);
@@ -106,7 +107,12 @@ export function TimeCapsuleModule() {
     setError(null);
     setSaving(true);
     try {
-      const unlockIso = new Date(unlockDateLocal).toISOString();
+      const unlockMs = Date.parse(unlockDateLocal);
+      if (!Number.isFinite(unlockMs)) {
+        setError('Please enter a valid unlock date and time.');
+        return;
+      }
+      const unlockIso = new Date(unlockMs).toISOString();
       const payload = {
         title: title.trim(),
         message: message.trim(),
@@ -162,8 +168,13 @@ export function TimeCapsuleModule() {
   };
 
   const handleDelete = async (id: string) => {
-    await apiRequest(`/capsules/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    await loadCapsules();
+    setError(null);
+    try {
+      await apiRequest(`/capsules/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await loadCapsules();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to delete capsule.');
+    }
   };
 
   const formatRemaining = (unlockAt: string) => {

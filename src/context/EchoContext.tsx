@@ -147,15 +147,26 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const markNotificationRead = useCallback(async (id: string) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
-    await apiRequest(`/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' });
-  }, []);
+  const markNotificationRead = useCallback(
+    async (id: string) => {
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+      try {
+        await apiRequest(`/notifications/${encodeURIComponent(id)}/read`, { method: 'POST' });
+      } catch {
+        void refreshNotifications();
+      }
+    },
+    [refreshNotifications]
+  );
 
   const markAllNotificationsRead = useCallback(async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    await apiRequest('/notifications/read-all', { method: 'POST' });
-  }, []);
+    try {
+      await apiRequest('/notifications/read-all', { method: 'POST' });
+    } catch {
+      void refreshNotifications();
+    }
+  }, [refreshNotifications]);
 
   const syncNow = useCallback(async () => {
     if (!navigator.onLine || !user) return 0;

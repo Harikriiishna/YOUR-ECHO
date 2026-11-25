@@ -115,13 +115,19 @@ export function SkillSwapModule() {
 
   const openExchangeChat = async (ex: SkillExchange) => {
     setActiveExchange(ex);
-    const res = await apiRequest<{ messages: ExchangeMessage[] }>(`/skills/exchanges/${encodeURIComponent(ex.id)}/messages`);
-    setChatMessages(res.messages);
+    setNotice(null);
+    try {
+      const res = await apiRequest<{ messages: ExchangeMessage[] }>(`/skills/exchanges/${encodeURIComponent(ex.id)}/messages`);
+      setChatMessages(res.messages);
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to load exchange messages.');
+    }
   };
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setSavingProfile(true);
+    setNotice(null);
     try {
       const split = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
       await apiRequest('/skills/profile', {
@@ -142,6 +148,8 @@ export function SkillSwapModule() {
       setNotice('Skill profile saved and matched against the network.');
       await loadAll();
       setTab('discover');
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to save skill profile.');
     } finally {
       setSavingProfile(false);
     }
@@ -150,37 +158,57 @@ export function SkillSwapModule() {
   const handleSendRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!requestTarget) return;
-    await apiRequest('/skills/exchanges', {
-      method: 'POST',
-      body: JSON.stringify({
-        recipientId: requestTarget.userId,
-        offeredSkill: offeredSkill.trim(),
-        requestedSkill: requestedSkill.trim(),
-        message: requestMsg.trim(),
-      }),
-    });
-    setRequestTarget(null);
-    setRequestMsg('');
-    setNotice('SkillSwap request sent.');
-    await loadAll();
-    setTab('exchanges');
+    setNotice(null);
+    try {
+      await apiRequest('/skills/exchanges', {
+        method: 'POST',
+        body: JSON.stringify({
+          recipientId: requestTarget.userId,
+          offeredSkill: offeredSkill.trim(),
+          requestedSkill: requestedSkill.trim(),
+          message: requestMsg.trim(),
+        }),
+      });
+      setRequestTarget(null);
+      setRequestMsg('');
+      setNotice('SkillSwap request sent.');
+      await loadAll();
+      setTab('exchanges');
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to send SkillSwap request.');
+    }
   };
 
   const handleExchangeAction = async (
     exchangeId: string,
     action: 'accept' | 'reject' | 'cancel' | 'schedule' | 'confirm_complete' | 'feedback'
   ) => {
-    await apiRequest(`/skills/exchanges/${encodeURIComponent(exchangeId)}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        action,
-        scheduledAt: scheduleInput ? new Date(scheduleInput).toISOString() : undefined,
-        sessionNotes: scheduleNotes,
-        feedbackRating: rating,
-        feedbackNote,
-      }),
-    });
-    await loadAll();
+    setNotice(null);
+    let scheduledIso: string | undefined;
+    if (action === 'schedule') {
+      const parsedMs = scheduleInput ? Date.parse(scheduleInput) : NaN;
+      if (!Number.isFinite(parsedMs)) {
+        setNotice('Please choose a valid session date and time.');
+        return;
+      }
+      scheduledIso = new Date(parsedMs).toISOString();
+    }
+
+    try {
+      await apiRequest(`/skills/exchanges/${encodeURIComponent(exchangeId)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          action,
+          scheduledAt: scheduledIso,
+          sessionNotes: scheduleNotes,
+          feedbackRating: rating,
+          feedbackNote,
+        }),
+      });
+      await loadAll();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to update exchange.');
+    }
   };
 
   const handleSendChat = async (e: React.FormEvent) => {
@@ -188,23 +216,34 @@ export function SkillSwapModule() {
     if (!activeExchange || !chatInput.trim()) return;
     const text = chatInput.trim();
     setChatInput('');
-    const res = await apiRequest<{ message: ExchangeMessage }>(
-      `/skills/exchanges/${encodeURIComponent(activeExchange.id)}/messages`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ content: text }),
-      }
-    );
-    setChatMessages((prev) => (prev.some((m) => m.id === res.message.id) ? prev : [...prev, res.message]));
+    setNotice(null);
+    try {
+      const res = await apiRequest<{ message: ExchangeMessage }>(
+        `/skills/exchanges/${encodeURIComponent(activeExchange.id)}/messages`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ content: text }),
+        }
+      );
+      setChatMessages((prev) => (prev.some((m) => m.id === res.message.id) ? prev : [...prev, res.message]));
+    } catch (err) {
+      setChatInput(text);
+      setNotice(err instanceof Error ? err.message : 'Unable to send message.');
+    }
   };
 
   const handleBlockUser = async (partnerId: string) => {
-    await apiRequest('/community/block', {
-      method: 'POST',
-      body: JSON.stringify({ targetType: 'skill_user', userId: partnerId }),
-    });
-    setNotice('User blocked from your SkillSwap discovery.');
-    await loadAll();
+    setNotice(null);
+    try {
+      await apiRequest('/community/block', {
+        method: 'POST',
+        body: JSON.stringify({ targetType: 'skill_user', userId: partnerId }),
+      });
+      setNotice('User blocked from your SkillSwap discovery.');
+      await loadAll();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to block user.');
+    }
   };
 
   return (

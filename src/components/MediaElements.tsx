@@ -107,6 +107,29 @@ export function AuthMedia({
   return <img src={objectUrl} alt={alt} className={`w-full object-cover rounded-xl ${className}`} />;
 }
 
+function pickSupportedAudioMimeType(): string | undefined {
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
+    return undefined;
+  }
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/ogg;codecs=opus',
+    'audio/ogg',
+  ];
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type));
+}
+
+function extensionForMime(mimeType: string): string {
+  const lower = mimeType.toLowerCase();
+  if (lower.includes('mp4') || lower.includes('m4a')) return 'mp4';
+  if (lower.includes('ogg')) return 'ogg';
+  if (lower.includes('wav')) return 'wav';
+  if (lower.includes('mpeg') || lower.includes('mp3')) return 'mp3';
+  return 'webm';
+}
+
 export function VoiceRecorder({
   contextType,
   onUploaded,
@@ -122,36 +145,64 @@ export function VoiceRecorder({
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
+  const cancelledRef = useRef(false);
+
+  const stopResources = () => {
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+  };
 
   useEffect(() => {
     return () => {
-      if (timerRef.current) window.clearInterval(timerRef.current);
+      cancelledRef.current = true;
       if (recorderRef.current && recorderRef.current.state !== 'inactive') {
-        recorderRef.current.stop();
+        try {
+          recorderRef.current.stop();
+        } catch {
+          // ignore cleanup stop errors
+        }
       }
+      stopResources();
     };
   }, []);
 
   const startRecording = async () => {
     setError(null);
+    cancelledRef.current = false;
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setError('Microphone recording is unavailable in this browser. You can upload an audio file instead.');
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      streamRef.current = stream;
+      const mimeType = pickSupportedAudioMimeType();
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
       chunksRef.current = [];
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
       recorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        if (timerRef.current) window.clearInterval(timerRef.current);
-        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        const finalMime = recorder.mimeType || mimeType || 'audio/webm';
+        stopResources();
+        if (cancelledRef.current) return;
+        const blob = new Blob(chunksRef.current, { type: finalMime });
         if (blob.size === 0) return;
 
         setUploading(true);
         try {
-          const uploaded = await uploadMediaFile(blob, `voice-${Date.now()}.webm`, contextType);
+          const ext = extensionForMime(finalMime);
+          const uploaded = await uploadMediaFile(blob, `voice-${Date.now()}.${ext}`, contextType);
+          if (cancelledRef.current) return;
           onUploaded(uploaded);
           if (onTranscribed) {
             setTranscribing(true);
@@ -160,17 +211,21 @@ export function VoiceRecorder({
                 method: 'POST',
                 body: JSON.stringify({ mediaId: uploaded.id }),
               });
-              if (tr.transcript) onTranscribed(tr.transcript);
+              if (!cancelledRef.current && tr.transcript) onTranscribed(tr.transcript);
             } catch (err) {
-              setError(err instanceof Error ? err.message : 'Transcription failed, audio saved.');
+              if (!cancelledRef.current) {
+                setError(err instanceof Error ? err.message : 'Transcription failed, audio saved.');
+              }
             } finally {
-              setTranscribing(false);
+              if (!cancelledRef.current) setTranscribing(false);
             }
           }
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'Failed to upload voice note.');
+          if (!cancelledRef.current) {
+            setError(err instanceof Error ? err.message : 'Failed to upload voice note.');
+          }
         } finally {
-          setUploading(false);
+          if (!cancelledRef.current) setUploading(false);
         }
       };
 
@@ -180,13 +235,19 @@ export function VoiceRecorder({
       setRecording(true);
       timerRef.current = window.setInterval(() => setSeconds((s) => s + 1), 1000);
     } catch {
+      stopResources();
+      setRecording(false);
       setError('Microphone permission is unavailable. You can still upload an audio file.');
     }
   };
 
   const stopRecording = () => {
     setRecording(false);
-    recorderRef.current?.stop();
+    if (recorderRef.current && recorderRef.current.state !== 'inactive') {
+      recorderRef.current.stop();
+    } else {
+      stopResources();
+    }
   };
 
   const handleAudioFile = async (e: React.ChangeEvent<HTMLInputElement>) => {

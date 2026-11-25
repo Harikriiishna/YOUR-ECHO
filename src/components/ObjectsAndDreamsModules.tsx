@@ -65,6 +65,7 @@ export function LifeBehindObjectsModule() {
   const [photoMediaId, setPhotoMediaId] = useState<string | null>(null);
   const [voiceMediaId, setVoiceMediaId] = useState<string | null>(null);
   const [isPublic, setIsPublic] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadObjects = async () => {
     setLoading(true);
@@ -139,6 +140,7 @@ export function LifeBehindObjectsModule() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     const split = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
     const payload = {
       name: name.trim(),
@@ -158,27 +160,36 @@ export function LifeBehindObjectsModule() {
       isPublic,
     };
 
-    if (editingId) {
-      const res = await apiRequest<{ object: EchoObject }>(`/objects/${encodeURIComponent(editingId)}`, {
-        method: 'PUT',
-        body: JSON.stringify(payload),
-      });
-      setSelected(res.object);
-    } else {
-      await apiRequest('/objects', {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      });
+    try {
+      if (editingId) {
+        const res = await apiRequest<{ object: EchoObject }>(`/objects/${encodeURIComponent(editingId)}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+        setSelected(res.object);
+      } else {
+        await apiRequest('/objects', {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      }
+      setEditorOpen(false);
+      await loadObjects();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to save object story.');
     }
-    setEditorOpen(false);
-    await loadObjects();
   };
 
   const handleOpenQr = async (obj: EchoObject) => {
-    const res = await apiRequest<{ qrDataUrl: string; shareUrl: string; isPublic: boolean }>(
-      `/objects/${encodeURIComponent(obj.id)}/qrcode`
-    );
-    setQrModal(res);
+    setError(null);
+    try {
+      const res = await apiRequest<{ qrDataUrl: string; shareUrl: string; isPublic: boolean }>(
+        `/objects/${encodeURIComponent(obj.id)}/qrcode`
+      );
+      setQrModal(res);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to generate QR code.');
+    }
   };
 
   const handleExport = () => {
@@ -190,13 +201,18 @@ export function LifeBehindObjectsModule() {
     a.href = url;
     a.download = `echo-objects-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleDelete = async (id: string) => {
-    await apiRequest(`/objects/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    if (selected?.id === id) setSelected(null);
-    await loadObjects();
+    setError(null);
+    try {
+      await apiRequest(`/objects/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (selected?.id === id) setSelected(null);
+      await loadObjects();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to delete object.');
+    }
   };
 
   return (
@@ -234,6 +250,15 @@ export function LifeBehindObjectsModule() {
           </div>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-700 dark:text-rose-200 flex items-center justify-between gap-2">
+          <span>{error}</span>
+          <button type="button" onClick={() => setError(null)} className="shrink-0 hover:opacity-80">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between min-w-0 w-full">
         <div className="w-full min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1">
@@ -571,6 +596,8 @@ export function LifeBehindObjectsModule() {
               Allow public read-only sharing via link & QR code
             </label>
 
+            {error && <p className="text-xs text-rose-600 dark:text-rose-300">{error}</p>}
+
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setEditorOpen(false)} className="px-4 py-2 text-xs text-ink-secondary">
                 Cancel
@@ -616,6 +643,7 @@ export function DreamArchiveModule() {
   const [voiceMediaId, setVoiceMediaId] = useState<string | null>(null);
   const [aiReflection, setAiReflection] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const loadDreams = async () => {
     setLoading(true);
@@ -654,6 +682,7 @@ export function DreamArchiveModule() {
   const handleGenerateReflection = async (dreamText: string) => {
     if (!dreamText.trim()) return;
     setAiBusy(true);
+    setError(null);
     try {
       const res = await apiRequest<{ suggestion: string; disclaimer?: string }>('/ai/assist', {
         method: 'POST',
@@ -665,6 +694,8 @@ export function DreamArchiveModule() {
       });
       const combined = res.disclaimer ? `${res.suggestion}\n\n(${res.disclaimer})` : res.suggestion;
       setAiReflection(combined);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to generate dream reflection.');
     } finally {
       setAiBusy(false);
     }
@@ -672,6 +703,7 @@ export function DreamArchiveModule() {
 
   const handleSaveDream = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     const payload = {
       title: title.trim(),
       content: content.trim(),
@@ -687,32 +719,41 @@ export function DreamArchiveModule() {
       aiReflection,
     };
 
-    if (!isOnline) {
-      await queueMutation({
-        endpoint: '/dreams',
-        payload,
-        label: `Dream: ${payload.title}`,
-      });
-      setEditorOpen(false);
-      return;
-    }
+    try {
+      if (!isOnline) {
+        await queueMutation({
+          endpoint: '/dreams',
+          payload,
+          label: `Dream: ${payload.title}`,
+        });
+        setEditorOpen(false);
+        return;
+      }
 
-    await apiRequest('/dreams', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    });
-    setTitle('');
-    setContent('');
-    setAiReflection('');
-    setImageMediaId(null);
-    setVoiceMediaId(null);
-    setEditorOpen(false);
-    await loadDreams();
+      await apiRequest('/dreams', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      setTitle('');
+      setContent('');
+      setAiReflection('');
+      setImageMediaId(null);
+      setVoiceMediaId(null);
+      setEditorOpen(false);
+      await loadDreams();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to save dream.');
+    }
   };
 
   const handleDelete = async (id: string) => {
-    await apiRequest(`/dreams/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    await loadDreams();
+    setError(null);
+    try {
+      await apiRequest(`/dreams/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await loadDreams();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to delete dream.');
+    }
   };
 
   const calendarDays = useMemo(() => {
@@ -753,6 +794,15 @@ export function DreamArchiveModule() {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-2.5 text-xs text-rose-700 dark:text-rose-200 flex items-center justify-between gap-2">
+          <span>{error}</span>
+          <button type="button" onClick={() => setError(null)} className="shrink-0 hover:opacity-80">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 min-w-0 w-full">
         <div className="w-full lg:w-auto min-w-0 flex items-center gap-1 p-1 rounded-xl bg-surface border border-hairline overflow-x-auto no-scrollbar">
@@ -1054,6 +1104,8 @@ export function DreamArchiveModule() {
               />
               Mark as recurring dream
             </label>
+
+            {error && <p className="text-xs text-rose-600 dark:text-rose-300">{error}</p>}
 
             <div className="flex justify-end gap-2 pt-2">
               <button type="button" onClick={() => setEditorOpen(false)} className="px-4 py-2 text-xs text-ink-secondary">

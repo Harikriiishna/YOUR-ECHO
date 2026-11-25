@@ -37,12 +37,36 @@ const upload = multer({
   },
 });
 
-memoryMediaRouter.post('/media/upload', requireAuth, upload.single('file'), (req: AuthenticatedRequest, res) => {
-  const file = req.file;
-  if (!file) {
-    res.status(400).json({ error: 'No file uploaded.' });
-    return;
-  }
+const handleSingleMediaUpload = upload.single('file');
+
+memoryMediaRouter.post(
+  '/media/upload',
+  requireAuth,
+  (req: AuthenticatedRequest, res, next) => {
+    handleSingleMediaUpload(req, res, (err: unknown) => {
+      if (!err) {
+        next();
+        return;
+      }
+      if (err instanceof multer.MulterError) {
+        const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+        const message =
+          err.code === 'LIMIT_FILE_SIZE'
+            ? 'File exceeds the 25MB upload limit.'
+            : err.message;
+        res.status(status).json({ error: message });
+        return;
+      }
+      const message = err instanceof Error ? err.message : 'File upload failed.';
+      res.status(400).json({ error: message });
+    });
+  },
+  (req: AuthenticatedRequest, res) => {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ error: 'No file uploaded.' });
+      return;
+    }
 
   const contextType = String((req.body as { contextType?: string })?.contextType || 'general').slice(0, 40);
   const contextId = (req.body as { contextId?: string })?.contextId || null;
@@ -64,7 +88,8 @@ memoryMediaRouter.post('/media/upload', requireAuth, upload.single('file'), (req
       url: `/api/media/${mediaId}`,
     },
   });
-});
+  }
+);
 
 memoryMediaRouter.get('/media/usage', requireAuth, (req: AuthenticatedRequest, res) => {
   const row = db
@@ -521,6 +546,11 @@ memoryMediaRouter.post(
 
     try {
       const results = await analyzeMemoryBatchSentiment(candidates);
+      if (results.length === 0) {
+        res.json({ analyzedCount: 0, memories: [] });
+        return;
+      }
+
       const now = new Date().toISOString();
       const updStmt = db.prepare(`
         UPDATE memories
@@ -677,6 +707,21 @@ memoryMediaRouter.get('/memories/:id/related', requireAuth, (req: AuthenticatedR
   res.json({ related });
 });
 
+function parseOptionalCoordinate(
+  raw: unknown,
+  min: number,
+  max: number,
+  label: string
+): { ok: true; value: number | null } | { ok: false; error: string } {
+  if (raw === null || raw === undefined || raw === '') {
+    return { ok: true, value: null };
+  }
+  if (typeof raw !== 'number' || !Number.isFinite(raw) || raw < min || raw > max) {
+    return { ok: false, error: `${label} must be a valid number between ${min} and ${max}.` };
+  }
+  return { ok: true, value: raw };
+}
+
 memoryMediaRouter.post('/memories', requireAuth, async (req: AuthenticatedRequest, res) => {
   const userId = req.authUser!.id;
   const body = req.body as {
@@ -725,6 +770,17 @@ memoryMediaRouter.post('/memories', requireAuth, async (req: AuthenticatedReques
     return;
   }
 
+  const parsedLat = parseOptionalCoordinate(body.latitude, -90, 90, 'Latitude');
+  if (!parsedLat.ok) {
+    res.status(400).json({ error: parsedLat.error });
+    return;
+  }
+  const parsedLng = parseOptionalCoordinate(body.longitude, -180, 180, 'Longitude');
+  if (!parsedLng.ok) {
+    res.status(400).json({ error: parsedLng.error });
+    return;
+  }
+
   let resolvedMood = (body.mood || 'Reflective').slice(0, 40);
   let resolvedTone = (body.sentimentTone || '').slice(0, 40);
   let resolvedImpact = (body.emotionalImpact || '').slice(0, 40);
@@ -764,8 +820,8 @@ memoryMediaRouter.post('/memories', requireAuth, async (req: AuthenticatedReques
       content,
       memoryDate,
       (body.locationName || '').slice(0, 140),
-      typeof body.latitude === 'number' ? body.latitude : null,
-      typeof body.longitude === 'number' ? body.longitude : null,
+      parsedLat.value,
+      parsedLng.value,
       resolvedMood,
       (body.category || 'Important moments').slice(0, 50),
       body.isFavorite ? 1 : 0,
@@ -834,6 +890,40 @@ memoryMediaRouter.put('/memories/:id', requireAuth, (req: AuthenticatedRequest, 
     mediaIds?: string[];
   };
 
+  const nextTitle = body.title !== undefined ? String(body.title).trim() : String(existing.title).trim();
+  const nextContent = body.content !== undefined ? String(body.content).trim() : String(existing.content).trim();
+  if (!nextTitle || !nextContent) {
+    res.status(400).json({ error: 'Memory title and content cannot be empty.' });
+    return;
+  }
+
+  let nextLat: unknown = existing.latitude;
+  if (body.latitude !== undefined) {
+    const parsedLat = parseOptionalCoordinate(body.latitude, -90, 90, 'Latitude');
+    if (!parsedLat.ok) {
+      res.status(400).json({ error: parsedLat.error });
+      return;
+    }
+    nextLat = parsedLat.value;
+  }
+
+  let nextLng: unknown = existing.longitude;
+  if (body.longitude !== undefined) {
+    const parsedLng = parseOptionalCoordinate(body.longitude, -180, 180, 'Longitude');
+    if (!parsedLng.ok) {
+      res.status(400).json({ error: parsedLng.error });
+      return;
+    }
+    nextLng = parsedLng.value;
+  }
+
+  const nextSentimentScore =
+    body.sentimentScore !== undefined
+      ? typeof body.sentimentScore === 'number' && Number.isFinite(body.sentimentScore)
+        ? Math.max(-100, Math.min(100, Math.round(body.sentimentScore)))
+        : null
+      : existing.sentiment_score;
+
   const now = new Date().toISOString();
   db.transaction(() => {
     db.prepare(`
@@ -841,12 +931,12 @@ memoryMediaRouter.put('/memories/:id', requireAuth, (req: AuthenticatedRequest, 
       SET title = ?, content = ?, memory_date = ?, location_name = ?, latitude = ?, longitude = ?, mood = ?, category = ?, is_favorite = ?, ai_excluded = ?, ai_summary = ?, sentiment_tone = ?, emotional_impact = ?, sentiment_score = ?, sentiment_rationale = ?, collection_id = ?, media_ids_json = ?, updated_at = ?
       WHERE id = ? AND user_id = ?
     `).run(
-      (body.title ?? String(existing.title)).trim().slice(0, 160),
-      (body.content ?? String(existing.content)).trim(),
+      nextTitle.slice(0, 160),
+      nextContent,
       body.memoryDate ?? String(existing.memory_date),
       (body.locationName ?? String(existing.location_name)).slice(0, 140),
-      body.latitude !== undefined ? body.latitude : existing.latitude,
-      body.longitude !== undefined ? body.longitude : existing.longitude,
+      nextLat,
+      nextLng,
       body.mood ?? String(existing.mood),
       body.category ?? String(existing.category),
       body.isFavorite !== undefined ? (body.isFavorite ? 1 : 0) : existing.is_favorite,
@@ -854,7 +944,7 @@ memoryMediaRouter.put('/memories/:id', requireAuth, (req: AuthenticatedRequest, 
       body.aiSummary !== undefined ? body.aiSummary.slice(0, 600) : String(existing.ai_summary),
       body.sentimentTone !== undefined ? body.sentimentTone.slice(0, 40) : String(existing.sentiment_tone || ''),
       body.emotionalImpact !== undefined ? body.emotionalImpact.slice(0, 40) : String(existing.emotional_impact || ''),
-      body.sentimentScore !== undefined ? body.sentimentScore : existing.sentiment_score,
+      nextSentimentScore,
       body.sentimentRationale !== undefined
         ? body.sentimentRationale.slice(0, 280)
         : String(existing.sentiment_rationale || ''),

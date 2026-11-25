@@ -28,6 +28,7 @@ import { apiRequest, readOfflineCache, saveOfflineCache } from '../lib/api';
 import type { MediaMeta, MemoryCollection, MemoryItem } from '../types/echo';
 import { AuthMedia, MediaPicker, VoiceRecorder } from './MediaElements';
 import { MemoriesMapView } from './MemoriesMapView';
+import { HorizontalMemoryTimeline } from './HorizontalMemoryTimeline';
 import { DEFAULT_CATEGORIES, PRIMARY_CATEGORIES, getCategoryStyle } from '../lib/memoryCategories';
 
 const MOODS = [
@@ -123,6 +124,9 @@ export function MemoriesModule() {
   const [tagFilterMode, setTagFilterMode] = useState<'any' | 'all'>('any');
   const [calendarMonth, setCalendarMonth] = useState(() => new Date().toISOString().slice(0, 7));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [selectedYear, setSelectedYear] = useState<string | null>(null);
+  const [selectedDateJump, setSelectedDateJump] = useState<string | null>(null);
+  const [pendingScrollMemoryId, setPendingScrollMemoryId] = useState<string | null>(null);
   const [sentimentBusy, setSentimentBusy] = useState(false);
   const [analyzingMemoryId, setAnalyzingMemoryId] = useState<string | null>(null);
   const [updatingCategoryId, setUpdatingCategoryId] = useState<string | null>(null);
@@ -226,6 +230,67 @@ export function MemoriesModule() {
       setQuickCaptureTarget(null);
     }
   }, [quickCaptureTarget]);
+
+  const displayedMemories = useMemo(() => {
+    if (!selectedYear) return memories;
+    return memories.filter((m) => m.memoryDate.startsWith(selectedYear));
+  }, [memories, selectedYear]);
+
+  useEffect(() => {
+    if (!pendingScrollMemoryId || view !== 'timeline') return;
+    const targetId = pendingScrollMemoryId;
+    const raf = window.requestAnimationFrame(() => {
+      const el = document.getElementById(`memory-card-${targetId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      setPendingScrollMemoryId(null);
+    });
+    return () => window.cancelAnimationFrame(raf);
+  }, [pendingScrollMemoryId, view, displayedMemories]);
+
+  const handleSelectTimelineYear = (year: string | null) => {
+    setSelectedYear(year);
+    setSelectedDateJump(null);
+    if (year) {
+      const yearMemories = memories.filter((m) => m.memoryDate.startsWith(year));
+      if (view === 'calendar') {
+        if (yearMemories.length > 0) {
+          setCalendarMonth(yearMemories[0].memoryDate.slice(0, 7));
+          setSelectedDay(yearMemories[0].memoryDate);
+        }
+      } else if (view !== 'timeline' && view !== 'map') {
+        setView('timeline');
+      }
+    }
+  };
+
+  const handleJumpToTimelineDate = (dateIso: string, targetMemory?: MemoryItem) => {
+    setSelectedDateJump(dateIso);
+    if (selectedYear && !dateIso.startsWith(selectedYear)) {
+      setSelectedYear(null);
+    }
+    const target = targetMemory || memories.find((m) => m.memoryDate === dateIso) || null;
+    if (view === 'calendar') {
+      setCalendarMonth(dateIso.slice(0, 7));
+      setSelectedDay(dateIso);
+      if (target) setActiveMemory(target);
+      return;
+    }
+    if (view !== 'timeline') {
+      setView('timeline');
+    }
+    if (target) {
+      setActiveMemory(target);
+      setPendingScrollMemoryId(target.id);
+    }
+  };
+
+  const handleClearTimelineJump = () => {
+    setSelectedYear(null);
+    setSelectedDateJump(null);
+    setPendingScrollMemoryId(null);
+  };
 
   useEffect(() => {
     if (!activeMemory) {
@@ -409,8 +474,34 @@ export function MemoriesModule() {
   const handleSaveMemory = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (category === 'Custom' && !customCategory.trim()) {
+      setError('Please enter a custom category name.');
+      return;
+    }
+
+    let parsedLat: number | null = null;
+    if (latitude.trim()) {
+      const n = Number(latitude.trim());
+      if (!Number.isFinite(n) || n < -90 || n > 90) {
+        setError('Latitude must be a valid number between -90 and 90.');
+        return;
+      }
+      parsedLat = n;
+    }
+
+    let parsedLng: number | null = null;
+    if (longitude.trim()) {
+      const n = Number(longitude.trim());
+      if (!Number.isFinite(n) || n < -180 || n > 180) {
+        setError('Longitude must be a valid number between -180 and 180.');
+        return;
+      }
+      parsedLng = n;
+    }
+
     setSaving(true);
-    const chosenCategory = category === 'Custom' && customCategory.trim() ? customCategory.trim() : category;
+    const chosenCategory = category === 'Custom' ? customCategory.trim() : category;
     const pendingDraftTag = editorTagDraft.trim().replace(/^#+/, '').slice(0, 40);
     const finalTags =
       pendingDraftTag && !editorTags.some((t) => t.toLowerCase() === pendingDraftTag.toLowerCase())
@@ -422,8 +513,8 @@ export function MemoriesModule() {
       content: content.trim(),
       memoryDate,
       locationName: locationName.trim(),
-      latitude: latitude.trim() ? Number(latitude) : null,
-      longitude: longitude.trim() ? Number(longitude) : null,
+      latitude: parsedLat,
+      longitude: parsedLng,
       mood,
       category: chosenCategory,
       aiExcluded,
@@ -472,24 +563,39 @@ export function MemoriesModule() {
   };
 
   const handleDeleteMemory = async (id: string) => {
-    await apiRequest(`/memories/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    if (activeMemory?.id === id) setActiveMemory(null);
-    await loadMemories();
+    setSentimentNotice(null);
+    try {
+      await apiRequest(`/memories/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (activeMemory?.id === id) setActiveMemory(null);
+      await loadMemories();
+    } catch (err) {
+      setSentimentNotice(err instanceof Error ? err.message : 'Failed to delete memory.');
+    }
   };
 
   const handleToggleFavorite = async (m: MemoryItem) => {
-    const res = await apiRequest<{ isFavorite: boolean }>(`/memories/${encodeURIComponent(m.id)}/favorite`, {
-      method: 'POST',
-    });
-    setMemories((prev) => prev.map((x) => (x.id === m.id ? { ...x, isFavorite: res.isFavorite } : x)));
-    if (activeMemory?.id === m.id) {
-      setActiveMemory({ ...activeMemory, isFavorite: res.isFavorite });
+    setSentimentNotice(null);
+    try {
+      const res = await apiRequest<{ isFavorite: boolean }>(`/memories/${encodeURIComponent(m.id)}/favorite`, {
+        method: 'POST',
+      });
+      setMemories((prev) => prev.map((x) => (x.id === m.id ? { ...x, isFavorite: res.isFavorite } : x)));
+      if (activeMemory?.id === m.id) {
+        setActiveMemory({ ...activeMemory, isFavorite: res.isFavorite });
+      }
+    } catch (err) {
+      setSentimentNotice(err instanceof Error ? err.message : 'Unable to update favorite status.');
     }
   };
 
   const handleRandomMemory = async () => {
-    const res = await apiRequest<{ memory: MemoryItem | null }>('/memories/random');
-    if (res.memory) setActiveMemory(res.memory);
+    setSentimentNotice(null);
+    try {
+      const res = await apiRequest<{ memory: MemoryItem | null }>('/memories/random');
+      if (res.memory) setActiveMemory(res.memory);
+    } catch (err) {
+      setSentimentNotice(err instanceof Error ? err.message : 'Unable to fetch random memory.');
+    }
   };
 
   const handleExportMemories = () => {
@@ -501,19 +607,24 @@ export function MemoriesModule() {
     a.href = url;
     a.download = `echo-memories-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
-    URL.revokeObjectURL(url);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   const handleCreateCollection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCollectionName.trim()) return;
-    await apiRequest('/collections', {
-      method: 'POST',
-      body: JSON.stringify({ name: newCollectionName.trim(), description: newCollectionDesc.trim() }),
-    });
-    setNewCollectionName('');
-    setNewCollectionDesc('');
-    await loadMemories();
+    setSentimentNotice(null);
+    try {
+      await apiRequest('/collections', {
+        method: 'POST',
+        body: JSON.stringify({ name: newCollectionName.trim(), description: newCollectionDesc.trim() }),
+      });
+      setNewCollectionName('');
+      setNewCollectionDesc('');
+      await loadMemories();
+    } catch (err) {
+      setSentimentNotice(err instanceof Error ? err.message : 'Failed to create collection.');
+    }
   };
 
   const toggleTagFilter = (tag: string) => {
@@ -525,22 +636,28 @@ export function MemoriesModule() {
   };
 
   const handleUpdateMemoryTags = async (memoryId: string, nextTags: string[]) => {
-    const res = await apiRequest<{ memory: MemoryItem }>(`/memories/${encodeURIComponent(memoryId)}/tags`, {
-      method: 'POST',
-      body: JSON.stringify({ tags: nextTags }),
-    });
-    setMemories((prev) => prev.map((x) => (x.id === memoryId ? res.memory : x)));
-    if (activeMemory?.id === memoryId) {
-      setActiveMemory(res.memory);
+    setSentimentNotice(null);
+    try {
+      const res = await apiRequest<{ memory: MemoryItem }>(`/memories/${encodeURIComponent(memoryId)}/tags`, {
+        method: 'POST',
+        body: JSON.stringify({ tags: nextTags }),
+      });
+      setMemories((prev) => prev.map((x) => (x.id === memoryId ? res.memory : x)));
+      if (activeMemory?.id === memoryId) {
+        setActiveMemory(res.memory);
+      }
+      const tagsRes = await apiRequest<{ tags: Array<{ tag: string; count: number }> }>('/memories/tags');
+      setAllTagsDirectory(tagsRes.tags);
+    } catch (err) {
+      setSentimentNotice(err instanceof Error ? err.message : 'Unable to update memory tags.');
     }
-    const tagsRes = await apiRequest<{ tags: Array<{ tag: string; count: number }> }>('/memories/tags');
-    setAllTagsDirectory(tagsRes.tags);
   };
 
   const handleUpdateMemoryCategory = async (memoryId: string, nextCategory: string) => {
     const clean = nextCategory.trim().slice(0, 48);
     if (!clean) return;
     setUpdatingCategoryId(memoryId);
+    setSentimentNotice(null);
     try {
       const res = await apiRequest<{ memory: MemoryItem }>(`/memories/${encodeURIComponent(memoryId)}/category`, {
         method: 'POST',
@@ -552,6 +669,8 @@ export function MemoriesModule() {
       }
       const summaryRes = await apiRequest<SentimentSummary>('/memories/sentiment-summary');
       setSentimentSummary(summaryRes);
+    } catch (err) {
+      setSentimentNotice(err instanceof Error ? err.message : 'Unable to update memory category.');
     } finally {
       setUpdatingCategoryId(null);
     }
@@ -744,6 +863,17 @@ export function MemoriesModule() {
           </button>
         </div>
       </div>
+
+      {/* Horizontal Chronological Timeline Visualization */}
+      <HorizontalMemoryTimeline
+        memories={memories}
+        selectedYear={selectedYear}
+        selectedDate={selectedDateJump}
+        activeMemoryId={activeMemory?.id || null}
+        onSelectYear={handleSelectTimelineYear}
+        onJumpToDate={handleJumpToTimelineDate}
+        onClearJump={handleClearTimelineJump}
+      />
 
       {/* View Switcher & Search Filter Bar */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 min-w-0">
@@ -1007,11 +1137,13 @@ export function MemoriesModule() {
         </div>
       )}
 
-      {(categoryFilter !== 'All' || selectedCollectionId || selectedPerson || selectedTags.length > 0 || impactFilter !== 'All' || moodFilter !== 'All') && (
+      {(categoryFilter !== 'All' || selectedCollectionId || selectedPerson || selectedTags.length > 0 || impactFilter !== 'All' || moodFilter !== 'All' || selectedYear || selectedDateJump) && (
         <div className="flex flex-wrap items-center gap-3 text-xs text-sky-700 dark:text-sky-300">
           <span>
             Filtered by{' '}
             {[
+              selectedYear ? `Year: ${selectedYear}` : null,
+              selectedDateJump ? `Date: ${selectedDateJump}` : null,
               categoryFilter !== 'All' ? `Category: ${categoryFilter}` : null,
               impactFilter !== 'All' ? `Impact: ${impactFilter}` : null,
               moodFilter !== 'All' ? `Tone: ${moodFilter}` : null,
@@ -1033,6 +1165,8 @@ export function MemoriesModule() {
               setSelectedCollectionId(null);
               setSelectedPerson(null);
               setSelectedTags([]);
+              setSelectedYear(null);
+              setSelectedDateJump(null);
             }}
             className="underline hover:text-ink"
           >
@@ -1051,7 +1185,7 @@ export function MemoriesModule() {
                   <div key={i} className="h-32 rounded-2xl bg-tint animate-pulse" />
                 ))}
               </div>
-            ) : memories.length === 0 ? (
+            ) : displayedMemories.length === 0 ? (
               <div className="rounded-2xl border border-hairline bg-surface p-10 text-center space-y-3">
                 <p className="font-display text-lg font-semibold text-ink">No memories match this view yet</p>
                 <p className="text-sm text-ink-muted max-w-md mx-auto">
@@ -1067,12 +1201,16 @@ export function MemoriesModule() {
               </div>
             ) : (
               <div className={activeMemory ? 'space-y-4' : 'grid grid-cols-1 md:grid-cols-2 gap-4'}>
-                {memories.map((m) => (
+                {displayedMemories.map((m) => (
                   <article
                     key={m.id}
-                    onClick={() => setActiveMemory(m)}
+                    id={`memory-card-${m.id}`}
+                    onClick={() => {
+                      setActiveMemory(m);
+                      setSelectedDateJump(m.memoryDate);
+                    }}
                     className={`touch-manipulation cursor-pointer rounded-2xl border p-5 transition-colors space-y-3 ${
-                      activeMemory?.id === m.id
+                      activeMemory?.id === m.id || (selectedDateJump && m.memoryDate === selectedDateJump)
                         ? 'border-sky-400/50 bg-surface-raised'
                         : 'border-hairline bg-surface hover:border-hairline-strong'
                     }`}
@@ -1585,7 +1723,7 @@ export function MemoriesModule() {
       {/* VIEW: MAP (LEAFLET) */}
       {view === 'map' && (
         <MemoriesMapView
-          memories={memories}
+          memories={displayedMemories}
           onOpenMemory={(m) => {
             setActiveMemory(m);
             setView('timeline');

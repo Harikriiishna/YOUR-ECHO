@@ -16,6 +16,20 @@ function getClient(): GoogleGenAI {
   });
 }
 
+function parseAiJson<T>(rawText: string | undefined, fallback: T): T {
+  const cleaned = (rawText ?? '')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+    .trim();
+  if (!cleaned) return fallback;
+  try {
+    return JSON.parse(cleaned) as T;
+  } catch {
+    throw new Error('ECHO AI returned an unexpected response format. Please try again.');
+  }
+}
+
 export interface GroundedSource {
   kind: 'memory' | 'dream' | 'object' | 'capsule';
   id: string;
@@ -169,13 +183,13 @@ export async function runMemoryAiQuery(userId: string, question: string): Promis
     },
   });
 
-  const parsed = JSON.parse((response.text ?? '{}').trim()) as {
+  const parsed = parseAiJson<{
     answer?: string;
     factsSummary?: string;
     reflection?: string;
     followUpQuestions?: string[];
     referencedItems?: Array<{ kind?: string; id?: string }>;
-  };
+  }>(response.text, {});
 
   const sourceMap = new Map<string, GroundedSource>();
   for (const m of memories) {
@@ -233,7 +247,7 @@ export async function generateMemoryAssist(params: {
         },
       },
     });
-    const parsed = JSON.parse((response.text ?? '{}').trim()) as { title?: string; summary?: string };
+    const parsed = parseAiJson<{ title?: string; summary?: string }>(response.text, {});
     return {
       title: parsed.title || 'Untitled Memory',
       summary: parsed.summary || '',
@@ -377,7 +391,7 @@ export async function analyzeMemorySentiment(params: {
     },
   });
 
-  const parsed = JSON.parse((response.text ?? '{}').trim()) as Record<string, unknown>;
+  const parsed = parseAiJson<Record<string, unknown>>(response.text, {});
   const tone = normalizeTone(parsed.tone, params.currentMood || 'Reflective');
   return {
     emotionalImpact: normalizeImpact(parsed.emotionalImpact),
@@ -428,7 +442,7 @@ export async function analyzeMemoryBatchSentiment(
     },
   });
 
-  const parsed = JSON.parse((response.text ?? '[]').trim()) as Array<Record<string, unknown>>;
+  const parsed = parseAiJson<Array<Record<string, unknown>>>(response.text, []);
   const validIds = new Set(compactEntries.map((e) => e.id));
   const out: Array<{ id: string } & SentimentAnalysisResult> = [];
   for (const item of Array.isArray(parsed) ? parsed : []) {
@@ -525,12 +539,12 @@ export async function generateMonthlyCheckInReflection(
     },
   });
 
-  const parsed = JSON.parse((response.text ?? '{}').trim()) as {
+  const parsed = parseAiJson<{
     summary?: string;
     themes?: Array<{ name?: string; insight?: string; memoryIds?: string[] }>;
     emotionalArc?: string;
     gentlePrompt?: string;
-  };
+  }>(response.text, {});
 
   const themes: MonthlyReflectionTheme[] = Array.isArray(parsed.themes)
     ? parsed.themes

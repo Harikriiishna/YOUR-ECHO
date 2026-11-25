@@ -373,6 +373,8 @@ export function AiMemoryModule() {
       ]);
       setFollowUps(res.followUpQuestions || []);
     } catch (err) {
+      setMessages((prev) => prev.filter((m) => m.id !== optimisticUser.id));
+      setInput((prev) => prev || clean);
       setError(err instanceof Error ? err.message : 'ECHO AI query failed.');
     } finally {
       setSending(false);
@@ -380,9 +382,14 @@ export function AiMemoryModule() {
   };
 
   const clearHistory = async () => {
-    await apiRequest('/ai/history', { method: 'DELETE' });
-    setMessages([]);
-    setFollowUps([]);
+    setError(null);
+    try {
+      await apiRequest('/ai/history', { method: 'DELETE' });
+      setMessages([]);
+      setFollowUps([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to clear AI conversation history.');
+    }
   };
 
   const sourceKindToModule = (kind: string): ModuleId => {

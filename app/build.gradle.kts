@@ -6,6 +6,10 @@ android {
     namespace = "com.echo.memorynetwork"
     compileSdk = 35
 
+    buildFeatures {
+        resValues = true
+    }
+
     defaultConfig {
         applicationId = "com.echo.memorynetwork"
         minSdk = 24

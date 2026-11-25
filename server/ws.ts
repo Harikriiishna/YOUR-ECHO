@@ -1,6 +1,6 @@
-import type { Server as HttpServer } from 'node:http';
+import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import { WebSocket, WebSocketServer } from 'ws';
-import { getUserFromToken } from './auth.ts';
+import { extractCookieToken, getUserFromToken } from './auth.ts';
 import { db } from './db.ts';
 
 interface ClientMeta {
@@ -10,6 +10,23 @@ interface ClientMeta {
 
 const userSockets = new Map<string, Set<WebSocket>>();
 const socketMeta = new WeakMap<WebSocket, ClientMeta>();
+
+function bindAuthenticatedSocket(ws: WebSocket, userId: string): void {
+  const existing = socketMeta.get(ws);
+  if (existing) {
+    userSockets.get(existing.userId)?.delete(ws);
+  }
+
+  const meta: ClientMeta = { userId, exchangeIds: existing?.exchangeIds ?? new Set() };
+  socketMeta.set(ws, meta);
+  if (!userSockets.has(userId)) {
+    userSockets.set(userId, new Set());
+  }
+  userSockets.get(userId)!.add(ws);
+  if (ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'auth:ok', userId }));
+  }
+}
 
 export function attachWebSocketServer(server: HttpServer): void {
   const wss = new WebSocketServer({ noServer: true });
@@ -27,7 +44,13 @@ export function attachWebSocketServer(server: HttpServer): void {
     }
   });
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+    const cookieToken = extractCookieToken(req.headers.cookie);
+    const cookieUser = getUserFromToken(cookieToken);
+    if (cookieUser) {
+      bindAuthenticatedSocket(ws, cookieUser.id);
+    }
+
     ws.on('message', (raw) => {
       try {
         const msg = JSON.parse(raw.toString()) as {
@@ -44,18 +67,7 @@ export function attachWebSocketServer(server: HttpServer): void {
             return;
           }
 
-          const existing = socketMeta.get(ws);
-          if (existing) {
-            userSockets.get(existing.userId)?.delete(ws);
-          }
-
-          const meta: ClientMeta = { userId: user.id, exchangeIds: new Set() };
-          socketMeta.set(ws, meta);
-          if (!userSockets.has(user.id)) {
-            userSockets.set(user.id, new Set());
-          }
-          userSockets.get(user.id)!.add(ws);
-          ws.send(JSON.stringify({ type: 'auth:ok', userId: user.id }));
+          bindAuthenticatedSocket(ws, user.id);
           return;
         }
 

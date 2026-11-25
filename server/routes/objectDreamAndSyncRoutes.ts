@@ -132,6 +132,13 @@ objectDreamAndSyncRouter.put('/objects/:id', requireAuth, (req: AuthenticatedReq
   }
 
   const body = req.body as Record<string, unknown>;
+  const nextName = body.name !== undefined ? String(body.name).trim() : String(existing.name).trim();
+  const nextStory = body.story !== undefined ? String(body.story).trim() : String(existing.story).trim();
+  if (!nextName || !nextStory) {
+    res.status(400).json({ error: 'Object name and story cannot be empty.' });
+    return;
+  }
+
   const now = new Date().toISOString();
 
   db.prepare(`
@@ -139,12 +146,12 @@ objectDreamAndSyncRouter.put('/objects/:id', requireAuth, (req: AuthenticatedReq
     SET name = ?, category = ?, photo_media_id = ?, voice_media_id = ?, description = ?, story = ?, acquisition_date = ?, current_owner = ?, previous_owners_json = ?, connected_people_json = ?, location = ?, historical_notes = ?, related_memory_ids_json = ?, tags_json = ?, is_public = ?, updated_at = ?
     WHERE id = ? AND user_id = ?
   `).run(
-    String(body.name ?? existing.name).trim().slice(0, 140),
+    nextName.slice(0, 140),
     String(body.category ?? existing.category).slice(0, 50),
     body.photoMediaId !== undefined ? (body.photoMediaId as string | null) : (existing.photo_media_id as string | null),
     body.voiceMediaId !== undefined ? (body.voiceMediaId as string | null) : (existing.voice_media_id as string | null),
     String(body.description ?? existing.description).slice(0, 500),
-    String(body.story ?? existing.story).trim(),
+    nextStory,
     String(body.acquisitionDate ?? existing.acquisition_date).slice(0, 40),
     String(body.currentOwner ?? existing.current_owner).slice(0, 100),
     Array.isArray(body.previousOwners) ? JSON.stringify(body.previousOwners) : String(existing.previous_owners_json),
@@ -179,7 +186,7 @@ objectDreamAndSyncRouter.get('/objects/:id/qrcode', requireAuth, async (req: Aut
     return;
   }
 
-  const baseUrl = process.env.APP_URL || `${req.protocol}://${req.get('host')}`;
+  const baseUrl = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
   const shareUrl = `${baseUrl}/?sharedObject=${encodeURIComponent(obj.share_slug)}`;
   const qrDataUrl = await QRCode.toDataURL(shareUrl, {
     width: 320,
@@ -366,13 +373,20 @@ objectDreamAndSyncRouter.put('/dreams/:id', requireAuth, (req: AuthenticatedRequ
   }
 
   const body = req.body as Record<string, unknown>;
+  const nextTitle = body.title !== undefined ? String(body.title).trim() : String(existing.title).trim();
+  const nextContent = body.content !== undefined ? String(body.content).trim() : String(existing.content).trim();
+  if (!nextTitle || !nextContent) {
+    res.status(400).json({ error: 'Dream title and description cannot be empty.' });
+    return;
+  }
+
   db.prepare(`
     UPDATE dreams
     SET title = ?, content = ?, dream_date = ?, emotion = ?, location = ?, category = ?, vividness = ?, is_recurring = ?, tags_json = ?, ai_reflection = ?, updated_at = ?
     WHERE id = ? AND user_id = ?
   `).run(
-    String(body.title ?? existing.title).trim().slice(0, 160),
-    String(body.content ?? existing.content).trim(),
+    nextTitle.slice(0, 160),
+    nextContent,
     String(body.dreamDate ?? existing.dream_date),
     String(body.emotion ?? existing.emotion),
     String(body.location ?? existing.location),

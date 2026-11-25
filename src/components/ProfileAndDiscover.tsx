@@ -138,12 +138,16 @@ export function ProfileSettingsView() {
   const [error, setError] = useState<string | null>(null);
 
   const loadAccountDetails = async () => {
-    const [sessRes, usageRes] = await Promise.all([
-      apiRequest<{ sessions: typeof sessions }>('/auth/sessions'),
-      apiRequest<{ totalBytes: number; fileCount: number }>('/media/usage'),
-    ]);
-    setSessions(sessRes.sessions);
-    setStorageUsage(usageRes);
+    try {
+      const [sessRes, usageRes] = await Promise.all([
+        apiRequest<{ sessions: typeof sessions }>('/auth/sessions'),
+        apiRequest<{ totalBytes: number; fileCount: number }>('/media/usage'),
+      ]);
+      setSessions(sessRes.sessions);
+      setStorageUsage(usageRes);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to load account details.');
+    }
   };
 
   useEffect(() => {
@@ -193,24 +197,39 @@ export function ProfileSettingsView() {
   };
 
   const handleRevokeSession = async (id: string) => {
-    await apiRequest(`/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    await loadAccountDetails();
+    setError(null);
+    try {
+      await apiRequest(`/auth/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await loadAccountDetails();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to revoke session.');
+    }
   };
 
   const handleExportAll = async () => {
-    const data = await apiRequest<Record<string, unknown>>('/export');
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `echo-full-export-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    setError(null);
+    try {
+      const data = await apiRequest<Record<string, unknown>>('/export');
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `echo-full-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to export archive.');
+    }
   };
 
   const handleDeleteAccount = async () => {
-    await apiRequest('/account', { method: 'DELETE' });
-    await logout();
+    setError(null);
+    try {
+      await apiRequest('/account', { method: 'DELETE' });
+      await logout();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to delete account.');
+    }
   };
 
   return (

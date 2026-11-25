@@ -720,17 +720,19 @@ communityAndSkillRouter.patch('/skills/exchanges/:id', requireAuth, (req: Authen
     }
     db.prepare("UPDATE skill_exchanges SET status = 'cancelled', updated_at = ? WHERE id = ?").run(now, ex.id);
   } else if (action === 'schedule') {
-    if (!['accepted', 'scheduled'].includes(currentStatus) || !scheduledAt) {
+    const scheduledMs = scheduledAt ? Date.parse(scheduledAt) : NaN;
+    if (!['accepted', 'scheduled'].includes(currentStatus) || !Number.isFinite(scheduledMs)) {
       res.status(400).json({ error: 'Accepted exchange and valid session date are required.' });
       return;
     }
+    const scheduledDate = new Date(scheduledMs);
     db.prepare("UPDATE skill_exchanges SET status = 'scheduled', scheduled_at = ?, session_notes = ?, updated_at = ? WHERE id = ?").run(
-      new Date(scheduledAt).toISOString(),
+      scheduledDate.toISOString(),
       (sessionNotes || '').slice(0, 500),
       now,
       ex.id
     );
-    createNotif(partnerId, 'session_reminder', 'SkillSwap Session Scheduled', `Session scheduled for ${new Date(scheduledAt).toLocaleString()}.`, 'skillswap', String(ex.id));
+    createNotif(partnerId, 'session_reminder', 'SkillSwap Session Scheduled', `Session scheduled for ${scheduledDate.toLocaleString()}.`, 'skillswap', String(ex.id));
   } else if (action === 'confirm_complete') {
     if (!['accepted', 'scheduled'].includes(currentStatus)) {
       res.status(400).json({ error: 'Only active exchanges can be confirmed for completion.' });

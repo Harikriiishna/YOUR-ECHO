@@ -107,58 +107,83 @@ export function StrangersWisdomModule() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTitle.trim() || !newContent.trim()) return;
-    await apiRequest('/wisdom', {
-      method: 'POST',
-      body: JSON.stringify({
-        postType,
-        category: newCategory,
-        title: newTitle.trim(),
-        content: newContent.trim(),
-      }),
-    });
-    setNewTitle('');
-    setNewContent('');
-    setCreateOpen(false);
-    await loadPosts();
+    setNotice(null);
+    try {
+      await apiRequest('/wisdom', {
+        method: 'POST',
+        body: JSON.stringify({
+          postType,
+          category: newCategory,
+          title: newTitle.trim(),
+          content: newContent.trim(),
+        }),
+      });
+      setNewTitle('');
+      setNewContent('');
+      setCreateOpen(false);
+      await loadPosts();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to publish wisdom post.');
+    }
   };
 
   const handleReact = async (postId: string, reactionType: 'helpful' | 'resonate' | 'save') => {
-    await apiRequest(`/wisdom/${encodeURIComponent(postId)}/react`, {
-      method: 'POST',
-      body: JSON.stringify({ reactionType }),
-    });
-    await loadPosts();
+    setNotice(null);
+    try {
+      await apiRequest(`/wisdom/${encodeURIComponent(postId)}/react`, {
+        method: 'POST',
+        body: JSON.stringify({ reactionType }),
+      });
+      await loadPosts();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to update reaction.');
+    }
   };
 
   const handleReply = async (postId: string) => {
     const text = (replyDrafts[postId] || '').trim();
     if (!text) return;
-    await apiRequest(`/wisdom/${encodeURIComponent(postId)}/replies`, {
-      method: 'POST',
-      body: JSON.stringify({ content: text }),
-    });
-    setReplyDrafts((prev) => ({ ...prev, [postId]: '' }));
-    await loadPosts();
+    setNotice(null);
+    try {
+      await apiRequest(`/wisdom/${encodeURIComponent(postId)}/replies`, {
+        method: 'POST',
+        body: JSON.stringify({ content: text }),
+      });
+      setReplyDrafts((prev) => ({ ...prev, [postId]: '' }));
+      await loadPosts();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to post reply.');
+    }
   };
 
   const handleBlockAuthor = async (postId: string) => {
-    await apiRequest('/community/block', {
-      method: 'POST',
-      body: JSON.stringify({ targetType: 'wisdom', targetId: postId }),
-    });
-    setNotice('Author muted from your feed without revealing their identity.');
-    await loadPosts();
+    setNotice(null);
+    try {
+      await apiRequest('/community/block', {
+        method: 'POST',
+        body: JSON.stringify({ targetType: 'wisdom', targetId: postId }),
+      });
+      setNotice('Author muted from your feed without revealing their identity.');
+      await loadPosts();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to mute author.');
+    }
   };
 
   const handleReport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reportTargetId) return;
-    await apiRequest('/community/report', {
-      method: 'POST',
-      body: JSON.stringify({ targetType: 'wisdom', targetId: reportTargetId, reason: reportReason }),
-    });
-    setReportTargetId(null);
-    setNotice('Report submitted for moderation review.');
+    setNotice(null);
+    try {
+      await apiRequest('/community/report', {
+        method: 'POST',
+        body: JSON.stringify({ targetType: 'wisdom', targetId: reportTargetId, reason: reportReason }),
+      });
+      setReportTargetId(null);
+      setNotice('Report submitted for moderation review.');
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to submit report.');
+    }
   };
 
   return (
@@ -483,55 +508,81 @@ export function HumanityFeedModule() {
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    await apiRequest('/humanity', {
-      method: 'POST',
-      body: JSON.stringify({
-        category: newCategory,
-        approxRegion: newRegion,
-        title: newTitle.trim(),
-        content: newContent.trim(),
-      }),
-    });
-    setNewTitle('');
-    setNewContent('');
-    setCreateOpen(false);
-    await loadPosts();
+    if (!newTitle.trim() || !newContent.trim()) return;
+    setNotice(null);
+    try {
+      await apiRequest('/humanity', {
+        method: 'POST',
+        body: JSON.stringify({
+          category: newCategory,
+          approxRegion: newRegion,
+          title: newTitle.trim(),
+          content: newContent.trim(),
+        }),
+      });
+      setNewTitle('');
+      setNewContent('');
+      setCreateOpen(false);
+      await loadPosts();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to publish story.');
+    }
   };
 
   const handleReact = async (postId: string, reactionType: 'helpful' | 'save') => {
-    await apiRequest(`/humanity/${encodeURIComponent(postId)}/react`, {
-      method: 'POST',
-      body: JSON.stringify({ reactionType }),
-    });
-    await loadPosts();
+    setNotice(null);
+    try {
+      await apiRequest(`/humanity/${encodeURIComponent(postId)}/react`, {
+        method: 'POST',
+        body: JSON.stringify({ reactionType }),
+      });
+      await loadPosts();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to update reaction.');
+    }
   };
 
   const handleReply = async (postId: string) => {
     const text = (replyDrafts[postId] || '').trim();
     if (!text) return;
-    await apiRequest(`/humanity/${encodeURIComponent(postId)}/replies`, {
-      method: 'POST',
-      body: JSON.stringify({ content: text }),
-    });
-    setReplyDrafts((prev) => ({ ...prev, [postId]: '' }));
-    await loadPosts();
+    setNotice(null);
+    try {
+      await apiRequest(`/humanity/${encodeURIComponent(postId)}/replies`, {
+        method: 'POST',
+        body: JSON.stringify({ content: text }),
+      });
+      setReplyDrafts((prev) => ({ ...prev, [postId]: '' }));
+      await loadPosts();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to send reply.');
+    }
   };
 
   const handleBlock = async (postId: string) => {
-    await apiRequest('/community/block', {
-      method: 'POST',
-      body: JSON.stringify({ targetType: 'humanity', targetId: postId }),
-    });
-    setNotice('Story author blocked from your feed.');
-    await loadPosts();
+    setNotice(null);
+    try {
+      await apiRequest('/community/block', {
+        method: 'POST',
+        body: JSON.stringify({ targetType: 'humanity', targetId: postId }),
+      });
+      setNotice('Story author blocked from your feed.');
+      await loadPosts();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to block author.');
+    }
   };
 
   const handleReport = async (postId: string) => {
-    await apiRequest('/community/report', {
-      method: 'POST',
-      body: JSON.stringify({ targetType: 'humanity', targetId: postId, reason: 'Community review requested' }),
-    });
-    setNotice('Story flagged for moderation.');
+    setNotice(null);
+    try {
+      await apiRequest('/community/report', {
+        method: 'POST',
+        body: JSON.stringify({ targetType: 'humanity', targetId: postId, reason: 'Community review requested' }),
+      });
+      setNotice('Story flagged for moderation.');
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : 'Unable to submit report.');
+    }
   };
 
   return (

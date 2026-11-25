@@ -111,17 +111,18 @@ function parseCookies(cookieHeader: string | undefined): Record<string, string> 
   return result;
 }
 
+export function extractCookieToken(cookieHeader: string | undefined): string | null {
+  const cookies = parseCookies(cookieHeader);
+  return cookies[SESSION_COOKIE_NAME] || null;
+}
+
 export function extractToken(req: Request): string | null {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     const token = authHeader.slice(7).trim();
     if (token) return token;
   }
-  const cookies = parseCookies(req.headers.cookie);
-  if (cookies[SESSION_COOKIE_NAME]) {
-    return cookies[SESSION_COOKIE_NAME];
-  }
-  return null;
+  return extractCookieToken(req.headers.cookie);
 }
 
 export function rowToAuthUser(row: Record<string, unknown>): AuthUser {

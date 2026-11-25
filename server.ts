@@ -33,8 +33,15 @@ async function startServer() {
   });
 
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    const errObj = err as { type?: string; status?: number; statusCode?: number; message?: string };
+    if (err instanceof SyntaxError && errObj?.type === 'entity.parse.failed') {
+      res.status(400).json({ error: 'Invalid JSON request body.' });
+      return;
+    }
+    const rawStatus = errObj?.status ?? errObj?.statusCode;
+    const status = typeof rawStatus === 'number' && rawStatus >= 400 && rawStatus < 600 ? rawStatus : 500;
     const message = err instanceof Error ? err.message : 'Internal server error.';
-    res.status(500).json({ error: message });
+    res.status(status).json({ error: message });
   });
 
   const server = http.createServer(app);
