@@ -25,7 +25,7 @@
 :root,
 :root[data-theme="social"] {
   --echo-canvas: #F6F5FB;
-  --echo-shell: rgba(255, 255, 255, 0.88);
+  --echo-shell: #FFFFFF;
   --echo-surface: #FFFFFF;
   --echo-surface-raised: #FDFBFF;
   --echo-inset: #F1EFF9;
@@ -55,7 +55,7 @@
 
 :root[data-theme="social-dark"] {
   --echo-canvas: #0A0812;
-  --echo-shell: rgba(17, 13, 30, 0.84);
+  --echo-shell: #110D1E;
   --echo-surface: #141022;
   --echo-surface-raised: #1D1732;
   --echo-inset: #0D0A18;
@@ -111,7 +111,7 @@
 
 :root[data-theme="glass"] {
   --echo-canvas: #060D1D;
-  --echo-shell: rgba(11, 19, 39, 0.56);
+  --echo-shell: rgba(9, 17, 36, 0.96);
   --echo-surface: rgba(16, 28, 56, 0.46);
   --echo-surface-raised: rgba(24, 42, 82, 0.58);
   --echo-inset: rgba(7, 13, 29, 0.52);
@@ -141,7 +141,7 @@
 
 :root[data-theme="crystal"] {
   --echo-canvas: #E8F0FA;
-  --echo-shell: rgba(255, 255, 255, 0.68);
+  --echo-shell: rgba(244, 248, 254, 0.96);
   --echo-surface: rgba(255, 255, 255, 0.66);
   --echo-surface-raised: rgba(255, 255, 255, 0.86);
   --echo-inset: rgba(241, 245, 249, 0.72);
@@ -291,6 +291,13 @@
   .font-mono, .tabular-nums {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+  }
+
+  input,
+  select,
+  textarea {
+    scroll-margin-top: 76px;
+    scroll-margin-bottom: calc(96px + var(--echo-keyboard-inset, 0px));
   }
 
   button,

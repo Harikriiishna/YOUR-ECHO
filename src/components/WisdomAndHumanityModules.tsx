@@ -390,8 +390,8 @@ export function StrangersWisdomModule() {
       )}
 
       {createOpen && (
-        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-center justify-center p-4">
-          <form onSubmit={handleCreate} className="w-full max-w-lg rounded-2xl border border-hairline-strong bg-surface p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <form onSubmit={handleCreate} className="w-full max-w-lg rounded-2xl border border-hairline-strong bg-surface p-5 sm:p-6 space-y-4 my-auto">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg font-bold text-ink">Share Anonymous Wisdom</h2>
               <button type="button" onClick={() => setCreateOpen(false)} className="text-ink-muted hover:text-ink">
@@ -448,8 +448,8 @@ export function StrangersWisdomModule() {
       )}
 
       {reportTargetId && (
-        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-center justify-center p-4">
-          <form onSubmit={handleReport} className="w-full max-w-sm rounded-2xl border border-hairline-strong bg-surface p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <form onSubmit={handleReport} className="w-full max-w-sm rounded-2xl border border-hairline-strong bg-surface p-6 space-y-4 my-auto">
             <h3 className="font-display text-base font-bold text-ink">Report Content</h3>
             <select
               value={reportReason}
@@ -829,8 +829,8 @@ export function HumanityFeedModule() {
       )}
 
       {createOpen && (
-        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-center justify-center p-4">
-          <form onSubmit={handleCreate} className="w-full max-w-lg rounded-2xl border border-hairline-strong bg-surface p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <form onSubmit={handleCreate} className="w-full max-w-lg rounded-2xl border border-hairline-strong bg-surface p-5 sm:p-6 space-y-4 my-auto">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg font-bold text-ink">Share to Humanity Feed</h2>
               <button type="button" onClick={() => setCreateOpen(false)} className="text-ink-muted hover:text-ink">

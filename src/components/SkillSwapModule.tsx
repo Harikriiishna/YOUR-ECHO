@@ -753,8 +753,8 @@ export function SkillSwapModule() {
 
       {/* PROPOSE EXCHANGE MODAL */}
       {requestTarget && (
-        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-center justify-center p-4">
-          <form onSubmit={handleSendRequest} className="w-full max-w-md rounded-2xl border border-hairline-strong bg-surface p-6 space-y-4">
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto">
+          <form onSubmit={handleSendRequest} className="w-full max-w-md rounded-2xl border border-hairline-strong bg-surface p-5 sm:p-6 space-y-4 my-auto">
             <div className="flex items-center justify-between">
               <h2 className="font-display text-lg font-bold text-ink">Exchange with {requestTarget.displayName}</h2>
               <button type="button" onClick={() => setRequestTarget(null)} className="text-ink-muted hover:text-ink">

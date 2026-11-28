@@ -856,8 +856,8 @@ export function AiMemoryModule() {
       </section>
 
       {/* Conversation Transcript */}
-      <div className="rounded-2xl border border-hairline bg-surface p-5 sm:p-6 space-y-5 min-h-[380px] flex flex-col justify-between">
-        <div className="space-y-4 overflow-y-auto max-h-[540px] pr-1">
+      <div className="rounded-2xl border border-hairline bg-surface p-4 sm:p-6 space-y-4 sm:space-y-5 min-h-[220px] sm:min-h-[380px] flex flex-col justify-between">
+        <div className="space-y-4 overflow-y-auto max-h-[40dvh] sm:max-h-[540px] pr-1">
           {loadingHistory ? (
             <div className="h-24 rounded-xl bg-tint animate-pulse" />
           ) : messages.length === 0 ? (

@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { useEcho } from '../context/EchoContext';
 import { apiRequest } from '../lib/api';
+import { useMobileKeyboardState } from '../lib/mobileKeyboard';
 import { ECHO_THEMES } from '../lib/themes';
 import type { ModuleId, SearchResult } from '../types/echo';
 
@@ -87,6 +88,7 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
   const [searching, setSearching] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const { isKeyboardOpen, keyboardOverlapPx } = useMobileKeyboardState();
 
   useEffect(() => {
     if (searchOpen) {
@@ -136,7 +138,7 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
   const activeThemeDef = ECHO_THEMES.find((t) => t.id === theme) || ECHO_THEMES[0];
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-clip bg-transparent text-ink flex">
+    <div className="min-h-dvh w-full max-w-full overflow-x-clip bg-transparent text-ink flex">
       {/* Desktop Left Sidebar */}
       <aside className="hidden lg:flex lg:w-64 lg:flex-col lg:fixed lg:inset-y-0 border-r border-hairline bg-shell">
         <div className="h-16 px-6 flex items-center justify-between border-b border-hairline">
@@ -255,9 +257,12 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 min-w-0 w-full lg:pl-64 flex flex-col min-h-screen">
-        {/* Sticky Top Bar (compact <= 56px on mobile, 3-zone contract) */}
-        <header className="sticky top-0 z-30 h-14 w-full bg-shell border-b border-hairline px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4">
+      <div className="flex-1 min-w-0 w-full lg:pl-64 flex flex-col min-h-dvh">
+        {/* Sticky Top Bar (compact <= 56px on mobile, opaque shell so scrolled text never bleeds through) */}
+        <header
+          data-echo-header
+          className="sticky top-0 z-30 min-h-14 pt-[env(safe-area-inset-top)] w-full bg-shell border-b border-hairline shadow-[0_1px_0_var(--echo-hairline)] px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4"
+        >
           <div className="flex items-center gap-2 min-w-0 shrink-0">
             <button
               type="button"
@@ -336,47 +341,60 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
         )}
 
         {/* Main Viewport */}
-        <main className="flex-1 min-w-0 w-full px-3.5 sm:px-6 lg:px-8 py-4 sm:py-6 pb-28 lg:pb-10 max-w-7xl mx-auto">
+        <main
+          className={`flex-1 min-w-0 w-full px-3.5 sm:px-6 lg:px-8 py-4 sm:py-6 max-w-7xl mx-auto ${
+            isKeyboardOpen ? 'pb-6 lg:pb-10' : 'pb-28 lg:pb-10'
+          }`}
+          style={
+            isKeyboardOpen && keyboardOverlapPx > 0
+              ? { paddingBottom: `${keyboardOverlapPx + 24}px` }
+              : undefined
+          }
+        >
           {children}
         </main>
       </div>
 
-      {/* Mobile Floating Quick Action Button */}
-      <button
-        type="button"
-        onClick={() => setFabOpen(true)}
-        aria-label="Quick capture menu"
-        className="touch-manipulation lg:hidden fixed right-4 bottom-[74px] z-40 w-12 h-12 rounded-2xl bg-brand-gradient text-accent-ink shadow-lg flex items-center justify-center"
-      >
-        <Plus className="w-6 h-6" />
-      </button>
+      {/* Mobile Floating Quick Action Button (hidden while soft keyboard is open) */}
+      {!isKeyboardOpen && (
+        <button
+          type="button"
+          onClick={() => setFabOpen(true)}
+          aria-label="Quick capture menu"
+          className="touch-manipulation lg:hidden fixed right-4 bottom-[74px] z-40 w-12 h-12 rounded-2xl bg-brand-gradient text-accent-ink shadow-lg flex items-center justify-center"
+        >
+          <Plus className="w-6 h-6" />
+        </button>
+      )}
 
-      {/* Mobile Bottom Navigation (compact <= 60px height, 5 tabs) */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 min-h-[58px] pb-[env(safe-area-inset-bottom)] bg-shell border-t border-hairline grid grid-cols-5 items-center px-1">
-        {[
-          { id: 'home' as ModuleId, label: 'Home', icon: Home },
-          { id: 'memories' as ModuleId, label: 'Memories', icon: BookOpen },
-          { id: 'humanity' as ModuleId, label: 'Humanity', icon: HeartHandshake },
-          { id: 'discover' as ModuleId, label: 'Discover', icon: Compass },
-          { id: 'profile' as ModuleId, label: 'Profile', icon: User },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const active = activeModule === tab.id;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => navigateTo(tab.id)}
-              className={`touch-manipulation flex flex-col items-center justify-center min-h-[44px] text-[10px] font-medium ${
-                active ? 'text-accent-text font-semibold' : 'text-ink-muted'
-              }`}
-            >
-              <Icon className="w-5 h-5 mb-0.5" />
-              <span>{tab.label}</span>
-            </button>
-          );
-        })}
-      </nav>
+      {/* Mobile Bottom Navigation (hidden while typing/entering so inputs stay clear above keyboard) */}
+      {!isKeyboardOpen && (
+        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 min-h-[58px] pb-[env(safe-area-inset-bottom)] bg-shell border-t border-hairline grid grid-cols-5 items-center px-1">
+          {[
+            { id: 'home' as ModuleId, label: 'Home', icon: Home },
+            { id: 'memories' as ModuleId, label: 'Memories', icon: BookOpen },
+            { id: 'humanity' as ModuleId, label: 'Humanity', icon: HeartHandshake },
+            { id: 'discover' as ModuleId, label: 'Discover', icon: Compass },
+            { id: 'profile' as ModuleId, label: 'Profile', icon: User },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const active = activeModule === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => navigateTo(tab.id)}
+                className={`touch-manipulation flex flex-col items-center justify-center min-h-[44px] text-[10px] font-medium ${
+                  active ? 'text-accent-text font-semibold' : 'text-ink-muted'
+                }`}
+              >
+                <Icon className="w-5 h-5 mb-0.5" />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </nav>
+      )}
 
       {/* QUICK CAPTURE SHEET */}
       {fabOpen && (
@@ -410,9 +428,9 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
 
       {/* UNIFIED SEARCH MODAL */}
       {searchOpen && (
-        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-start justify-center p-4 pt-16">
-          <div className="w-full max-w-xl rounded-2xl border border-hairline-strong bg-surface overflow-hidden">
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-hairline">
+        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex items-start justify-center p-3 sm:p-4 pt-4 sm:pt-16 overflow-y-auto">
+          <div className="w-full max-w-xl rounded-2xl border border-hairline-strong bg-surface overflow-hidden max-h-[calc(100dvh-2rem)] flex flex-col">
+            <div className="flex items-center gap-3 px-4 py-3 border-b border-hairline shrink-0">
               <Search className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
               <input
                 ref={searchInputRef}
@@ -427,7 +445,7 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
               </button>
             </div>
 
-            <div className="max-h-96 overflow-y-auto p-3 space-y-1.5">
+            <div className="flex-1 min-h-0 max-h-96 overflow-y-auto p-3 space-y-1.5">
               {searching ? (
                 <p className="text-xs text-ink-muted p-4 text-center">Searching your ECHO network...</p>
               ) : searchQuery.trim() && searchResults.length === 0 ? (

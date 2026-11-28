@@ -17,9 +17,11 @@ import { SkillSwapModule } from './components/SkillSwapModule';
 import { TimeCapsuleModule } from './components/TimeCapsuleModule';
 import { HumanityFeedModule, StrangersWisdomModule } from './components/WisdomAndHumanityModules';
 import { EchoProvider, useEcho } from './context/EchoContext';
+import { useMobileKeyboardState } from './lib/mobileKeyboard';
 
 function EchoAppContent() {
   const { user, authLoading, activeModule } = useEcho();
+  useMobileKeyboardState();
   const [sharedObjectSlug, setSharedObjectSlug] = useState<string | null>(() => {
     if (typeof window === 'undefined') return null;
     return new URLSearchParams(window.location.search).get('sharedObject');
