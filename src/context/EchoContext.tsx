@@ -7,6 +7,7 @@ import {
   removeOfflineMutation,
   setAuthToken,
 } from '../lib/api';
+import { signOutFirebase } from '../lib/firebase';
 import { isStandaloneLocalMode } from '../lib/localStandaloneApi';
 import {
   applyThemeToDocument,
@@ -255,8 +256,9 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   // Real-time WebSocket connection when authenticated
+  const userId = user?.id ?? null;
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       wsRef.current?.close();
       wsRef.current = null;
       setWsConnected(false);
@@ -302,7 +304,7 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
     return () => {
       ws.close();
     };
-  }, [user, refreshNotifications]);
+  }, [userId, refreshNotifications]);
 
   const loginSuccess = useCallback(
     (nextUser: AuthUser, token: string) => {
@@ -316,6 +318,11 @@ export function EchoProvider({ children }: { children: React.ReactNode }) {
   const logout = useCallback(async () => {
     try {
       await apiRequest('/auth/logout', { method: 'POST' });
+    } catch {
+      // ignore
+    }
+    try {
+      await signOutFirebase();
     } catch {
       // ignore
     }

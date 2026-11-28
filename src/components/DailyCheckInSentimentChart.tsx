@@ -638,7 +638,7 @@ export function DailyCheckInSentimentChart({
 
           <div className="w-full h-64 sm:h-72 min-w-0">
             {chartMode === 'trend' ? (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <AreaChart
                   data={daySeries}
                   margin={{ top: 12, right: 16, left: -12, bottom: 4 }}
@@ -758,7 +758,7 @@ export function DailyCheckInSentimentChart({
                 </AreaChart>
               </ResponsiveContainer>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <BarChart
                   data={impactSeries}
                   margin={{ top: 12, right: 16, left: -12, bottom: 4 }}

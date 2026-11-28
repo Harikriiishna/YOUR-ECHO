@@ -16,6 +16,8 @@ import {
   Watch,
   X,
 } from 'lucide-react';
+import dreamNebulaImg from '../assets/images/echo_dream_nebula_1795260972846.jpg';
+import heirloomWatchImg from '../assets/images/echo_heirloom_watch_1795260972446.jpg';
 import { useEcho } from '../context/EchoContext';
 import { apiRequest, readOfflineCache, saveOfflineCache } from '../lib/api';
 import type { DreamItem, EchoObject, MemoryItem } from '../types/echo';
@@ -39,7 +41,7 @@ const DREAM_CATEGORIES = ['Lucid', 'Recurring', 'Surreal', 'Symbolic', 'Nostalgi
 const DREAM_EMOTIONS = ['Wonder', 'Peace', 'Curiosity', 'Nostalgia', 'Fear', 'Joy', 'Mystery', 'Longing'];
 
 export function LifeBehindObjectsModule() {
-  const { user, navigateTo, quickCaptureTarget, setQuickCaptureTarget } = useEcho();
+  const { user, focusItemId, navigateTo, quickCaptureTarget, setQuickCaptureTarget } = useEcho();
   const [objects, setObjects] = useState<EchoObject[]>([]);
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -65,6 +67,7 @@ export function LifeBehindObjectsModule() {
   const [photoMediaId, setPhotoMediaId] = useState<string | null>(null);
   const [voiceMediaId, setVoiceMediaId] = useState<string | null>(null);
   const [isPublic, setIsPublic] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadObjects = async () => {
@@ -80,8 +83,15 @@ export function LifeBehindObjectsModule() {
       ]);
       setObjects(objRes.objects);
       setMemories(memRes.memories);
-    } catch {
-      setObjects([]);
+      void saveOfflineCache('objects', objRes.objects);
+    } catch (err) {
+      const cached = await readOfflineCache<EchoObject[]>('objects');
+      if (cached) {
+        setObjects(cached);
+      } else {
+        setObjects([]);
+        setError(err instanceof Error ? err.message : 'Unable to load objects.');
+      }
     } finally {
       setLoading(false);
     }
@@ -90,6 +100,13 @@ export function LifeBehindObjectsModule() {
   useEffect(() => {
     void loadObjects();
   }, [categoryFilter]);
+
+  useEffect(() => {
+    if (focusItemId && objects.length > 0) {
+      const match = objects.find((o) => o.id === focusItemId);
+      if (match) setSelected(match);
+    }
+  }, [focusItemId, objects]);
 
   useEffect(() => {
     if (quickCaptureTarget === 'object') {
@@ -115,6 +132,7 @@ export function LifeBehindObjectsModule() {
     setPhotoMediaId(null);
     setVoiceMediaId(null);
     setIsPublic(false);
+    setError(null);
     setEditorOpen(true);
   };
 
@@ -135,12 +153,15 @@ export function LifeBehindObjectsModule() {
     setPhotoMediaId(obj.photoMediaId);
     setVoiceMediaId(obj.voiceMediaId);
     setIsPublic(obj.isPublic);
+    setError(null);
     setEditorOpen(true);
   };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     setError(null);
+    setSaving(true);
     const split = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
     const payload = {
       name: name.trim(),
@@ -177,6 +198,8 @@ export function LifeBehindObjectsModule() {
       await loadObjects();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save object story.');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -219,7 +242,7 @@ export function LifeBehindObjectsModule() {
     <div className="space-y-6 min-w-0 w-full">
       <div className="relative overflow-hidden rounded-2xl border border-hairline bg-[#0D1424] w-full">
         <SafeImage
-          src="/src/assets/images/echo_heirloom_watch_1795260972446.jpg"
+          src={heirloomWatchImg}
           alt="Antique brass pocket watch beside a worn leather notebook"
           className="absolute inset-0 w-full h-full object-cover opacity-35"
         />
@@ -278,17 +301,30 @@ export function LifeBehindObjectsModule() {
           ))}
         </div>
 
-        <div className="relative w-full sm:w-56 min-w-0 shrink-0">
-          <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && void loadObjects()}
-            placeholder="Search objects..."
-            className="w-full rounded-xl border border-hairline-strong bg-surface pl-8 pr-3 py-2 text-xs text-ink"
-          />
-        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void loadObjects();
+          }}
+          className="flex items-center gap-1.5 w-full sm:w-auto min-w-0 shrink-0"
+        >
+          <div className="relative flex-1 sm:w-48 min-w-0">
+            <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search objects..."
+              className="w-full rounded-xl border border-hairline-strong bg-surface pl-8 pr-3 py-2 text-xs text-ink"
+            />
+          </div>
+          <button
+            type="submit"
+            className="rounded-xl border border-hairline-strong bg-surface px-3 py-2 text-xs font-medium text-ink-secondary hover:text-ink shrink-0"
+          >
+            Search
+          </button>
+        </form>
       </div>
 
       {loading ? (
@@ -602,8 +638,12 @@ export function LifeBehindObjectsModule() {
               <button type="button" onClick={() => setEditorOpen(false)} className="px-4 py-2 text-xs text-ink-secondary">
                 Cancel
               </button>
-              <button type="submit" className="rounded-xl bg-rose-400 px-5 py-2 text-xs font-semibold text-slate-950">
-                {editingId ? 'Update Object' : 'Save Object'}
+              <button
+                type="submit"
+                disabled={saving}
+                className="rounded-xl bg-rose-400 px-5 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60"
+              >
+                {saving ? 'Saving...' : editingId ? 'Update Object' : 'Save Object'}
               </button>
             </div>
           </form>
@@ -614,7 +654,7 @@ export function LifeBehindObjectsModule() {
 }
 
 export function DreamArchiveModule() {
-  const { isOnline, queueMutation, quickCaptureTarget, setQuickCaptureTarget } = useEcho();
+  const { focusItemId, isOnline, queueMutation, quickCaptureTarget, setQuickCaptureTarget } = useEcho();
   const [dreams, setDreams] = useState<DreamItem[]>([]);
   const [patterns, setPatterns] = useState<{
     totalDreams: number;
@@ -627,12 +667,12 @@ export function DreamArchiveModule() {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
   const [recurringOnly, setRecurringOnly] = useState(false);
-  const [calendarMonth, setCalendarMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date().toLocaleDateString('en-CA').slice(0, 7));
 
   const [editorOpen, setEditorOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [dreamDate, setDreamDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dreamDate, setDreamDate] = useState(() => new Date().toLocaleDateString('en-CA'));
   const [emotion, setEmotion] = useState('Wonder');
   const [location, setLocation] = useState('');
   const [category, setCategory] = useState('Lucid');
@@ -643,6 +683,7 @@ export function DreamArchiveModule() {
   const [voiceMediaId, setVoiceMediaId] = useState<string | null>(null);
   const [aiReflection, setAiReflection] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
+  const [savingDream, setSavingDream] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const loadDreams = async () => {
@@ -660,9 +701,13 @@ export function DreamArchiveModule() {
       setDreams(dRes.dreams);
       setPatterns(pRes);
       void saveOfflineCache('dreams', dRes.dreams);
-    } catch {
+    } catch (err) {
       const cached = await readOfflineCache<DreamItem[]>('dreams');
-      if (cached) setDreams(cached);
+      if (cached) {
+        setDreams(cached);
+      } else {
+        setError(err instanceof Error ? err.message : 'Unable to load dreams.');
+      }
     } finally {
       setLoading(false);
     }
@@ -672,9 +717,32 @@ export function DreamArchiveModule() {
     void loadDreams();
   }, [categoryFilter, recurringOnly]);
 
+  const openNewDreamEditor = () => {
+    setTitle('');
+    setContent('');
+    setDreamDate(new Date().toLocaleDateString('en-CA'));
+    setEmotion('Wonder');
+    setLocation('');
+    setCategory('Lucid');
+    setVividness(3);
+    setIsRecurring(false);
+    setTagsInput('');
+    setImageMediaId(null);
+    setVoiceMediaId(null);
+    setAiReflection('');
+    setError(null);
+    setEditorOpen(true);
+  };
+
+  useEffect(() => {
+    if (focusItemId && dreams.some((d) => d.id === focusItemId)) {
+      setView('timeline');
+    }
+  }, [focusItemId, dreams]);
+
   useEffect(() => {
     if (quickCaptureTarget === 'dream') {
-      setEditorOpen(true);
+      openNewDreamEditor();
       setQuickCaptureTarget(null);
     }
   }, [quickCaptureTarget]);
@@ -703,7 +771,9 @@ export function DreamArchiveModule() {
 
   const handleSaveDream = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (savingDream) return;
     setError(null);
+    setSavingDream(true);
     const payload = {
       title: title.trim(),
       content: content.trim(),
@@ -736,6 +806,10 @@ export function DreamArchiveModule() {
       });
       setTitle('');
       setContent('');
+      setLocation('');
+      setTagsInput('');
+      setIsRecurring(false);
+      setVividness(3);
       setAiReflection('');
       setImageMediaId(null);
       setVoiceMediaId(null);
@@ -743,6 +817,8 @@ export function DreamArchiveModule() {
       await loadDreams();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save dream.');
+    } finally {
+      setSavingDream(false);
     }
   };
 
@@ -757,13 +833,16 @@ export function DreamArchiveModule() {
   };
 
   const calendarDays = useMemo(() => {
-    const [yr, mo] = calendarMonth.split('-').map(Number);
+    const safeMonth = /^\d{4}-\d{2}$/.test(calendarMonth)
+      ? calendarMonth
+      : new Date().toLocaleDateString('en-CA').slice(0, 7);
+    const [yr, mo] = safeMonth.split('-').map(Number);
     const first = new Date(yr, mo - 1, 1).getDay();
     const total = new Date(yr, mo, 0).getDate();
     const cells: Array<{ day: number | null; iso: string | null; items: DreamItem[] }> = [];
     for (let i = 0; i < first; i++) cells.push({ day: null, iso: null, items: [] });
     for (let d = 1; d <= total; d++) {
-      const iso = `${calendarMonth}-${String(d).padStart(2, '0')}`;
+      const iso = `${safeMonth}-${String(d).padStart(2, '0')}`;
       cells.push({ day: d, iso, items: dreams.filter((x) => x.dreamDate === iso) });
     }
     return cells;
@@ -773,7 +852,7 @@ export function DreamArchiveModule() {
     <div className="space-y-6 min-w-0 w-full">
       <div className="relative overflow-hidden rounded-2xl border border-hairline bg-[#0D1424] w-full">
         <SafeImage
-          src="/src/assets/images/echo_dream_nebula_1795260972846.jpg"
+          src={dreamNebulaImg}
           alt="Twilight alpine lake with soft violet and coral reflections"
           className="absolute inset-0 w-full h-full object-cover opacity-35"
         />
@@ -787,7 +866,7 @@ export function DreamArchiveModule() {
           </div>
           <button
             type="button"
-            onClick={() => setEditorOpen(true)}
+            onClick={openNewDreamEditor}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-400 px-4 py-2.5 text-xs font-semibold text-slate-950 hover:bg-indigo-300 whitespace-nowrap shrink-0 min-h-[44px] w-full sm:w-auto"
           >
             <Plus className="w-4 h-4" /> Record Dream
@@ -825,17 +904,30 @@ export function DreamArchiveModule() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 min-w-0 w-full lg:w-auto">
-          <div className="relative w-full sm:w-48 min-w-0">
-            <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && void loadDreams()}
-              placeholder="Search dreams..."
-              className="w-full rounded-xl border border-hairline-strong bg-surface pl-8 pr-3 py-2 text-xs text-ink"
-            />
-          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void loadDreams();
+            }}
+            className="flex items-center gap-1.5 w-full sm:w-auto min-w-0"
+          >
+            <div className="relative flex-1 sm:w-44 min-w-0">
+              <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search dreams..."
+                className="w-full rounded-xl border border-hairline-strong bg-surface pl-8 pr-3 py-2 text-xs text-ink"
+              />
+            </div>
+            <button
+              type="submit"
+              className="rounded-xl border border-hairline-strong bg-surface px-3 py-2 text-xs font-medium text-ink-secondary hover:text-ink shrink-0"
+            >
+              Search
+            </button>
+          </form>
           <select
             value={categoryFilter}
             onChange={(e) => setCategoryFilter(e.target.value)}
@@ -1111,8 +1203,12 @@ export function DreamArchiveModule() {
               <button type="button" onClick={() => setEditorOpen(false)} className="px-4 py-2 text-xs text-ink-secondary">
                 Cancel
               </button>
-              <button type="submit" className="rounded-xl bg-indigo-400 px-5 py-2 text-xs font-semibold text-slate-950">
-                Save Dream
+              <button
+                type="submit"
+                disabled={savingDream}
+                className="rounded-xl bg-indigo-400 px-5 py-2 text-xs font-semibold text-slate-950 disabled:opacity-60"
+              >
+                {savingDream ? 'Saving...' : 'Save Dream'}
               </button>
             </div>
           </form>

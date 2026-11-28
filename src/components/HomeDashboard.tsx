@@ -6,6 +6,7 @@ import {
   Compass,
   Feather,
   HeartHandshake,
+  MapPin,
   Moon,
   Plus,
   Repeat,
@@ -13,6 +14,8 @@ import {
   Sparkles,
   Watch,
 } from 'lucide-react';
+import capsuleVaultImg from '../assets/images/echo_capsule_vault_1795260972711.jpg';
+import heroCosmosImg from '../assets/images/echo_hero_cosmos_1795260972427.jpg';
 import { useEcho } from '../context/EchoContext';
 import { apiRequest } from '../lib/api';
 import type { ModuleId } from '../types/echo';
@@ -136,7 +139,7 @@ export function HomeDashboard() {
         body: JSON.stringify({
           title,
           content: quickText.trim(),
-          memoryDate: new Date().toISOString().slice(0, 10),
+          memoryDate: new Date().toLocaleDateString('en-CA'),
           category: 'Important moments',
           mood: 'Reflective',
         }),
@@ -172,6 +175,7 @@ export function HomeDashboard() {
     icon: React.ComponentType<{ className?: string }>;
   }> = [
     { id: 'memories', title: 'ECHO Memory', subtitle: 'Timeline, calendar, map & voice', accent: 'text-sky-600 dark:text-sky-300', icon: BookOpen },
+    { id: 'memory-map', title: 'Memory Map', subtitle: 'Galaxy constellation & world atlas', accent: 'text-emerald-600 dark:text-emerald-300', icon: MapPin },
     { id: 'ai', title: 'AI Life Memory', subtitle: 'Ask grounded questions about your past', accent: 'text-cyan-600 dark:text-cyan-300', icon: Sparkles },
     { id: 'capsules', title: 'Time Capsule', subtitle: 'Seal letters & media for future dates', accent: 'text-amber-600 dark:text-amber-300', icon: Clock },
     { id: 'wisdom', title: "Stranger's Wisdom", subtitle: 'Anonymous advice & life lessons', accent: 'text-violet-600 dark:text-violet-300', icon: Feather },
@@ -198,7 +202,7 @@ export function HomeDashboard() {
       {/* Greeting & Real Archive Summary (rich plum-coral scrim keeps white text legible in all themes) */}
       <section className="relative overflow-hidden rounded-2xl border border-hairline bg-[#190B2B] w-full">
         <SafeImage
-          src="/src/assets/images/echo_hero_cosmos_1795260972427.jpg"
+          src={heroCosmosImg}
           alt="Midnight sky and glowing memory trails"
           className="absolute inset-0 w-full h-full object-cover opacity-35"
         />
@@ -397,7 +401,7 @@ export function HomeDashboard() {
         <div className="lg:col-span-5 rounded-2xl border border-hairline bg-surface overflow-hidden flex flex-col justify-between min-w-0">
           <div className="relative h-36">
             <SafeImage
-              src="/src/assets/images/echo_capsule_vault_1795260972711.jpg"
+              src={capsuleVaultImg}
               alt="Sealed titanium and amber glass time capsule"
               className="w-full h-full object-cover"
             />

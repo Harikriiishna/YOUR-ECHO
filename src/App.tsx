@@ -3,12 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { useState } from 'react';
 import { AiMemoryModule } from './components/AiMemoryModule';
 import { AuthScreen } from './components/AuthScreen';
 import { HomeDashboard } from './components/HomeDashboard';
 import { MemoriesModule } from './components/MemoriesModule';
+import { MemoryMapPage } from './components/MemoryMapPage';
 import { DreamArchiveModule, LifeBehindObjectsModule } from './components/ObjectsAndDreamsModules';
 import { DiscoverHub, ProfileSettingsView } from './components/ProfileAndDiscover';
+import { SharedObjectViewer } from './components/SharedObjectViewer';
 import { ShellLayout } from './components/ShellLayout';
 import { SkillSwapModule } from './components/SkillSwapModule';
 import { TimeCapsuleModule } from './components/TimeCapsuleModule';
@@ -17,6 +20,22 @@ import { EchoProvider, useEcho } from './context/EchoContext';
 
 function EchoAppContent() {
   const { user, authLoading, activeModule } = useEcho();
+  const [sharedObjectSlug, setSharedObjectSlug] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return new URLSearchParams(window.location.search).get('sharedObject');
+  });
+
+  if (sharedObjectSlug) {
+    return (
+      <SharedObjectViewer
+        slug={sharedObjectSlug}
+        onClose={() => {
+          window.history.replaceState({}, '', '/');
+          setSharedObjectSlug(null);
+        }}
+      />
+    );
+  }
 
   if (authLoading) {
     return (
@@ -37,6 +56,7 @@ function EchoAppContent() {
     <ShellLayout>
       {activeModule === 'home' && <HomeDashboard />}
       {activeModule === 'memories' && <MemoriesModule />}
+      {activeModule === 'memory-map' && <MemoryMapPage />}
       {activeModule === 'ai' && <AiMemoryModule />}
       {activeModule === 'capsules' && <TimeCapsuleModule />}
       {activeModule === 'wisdom' && <StrangersWisdomModule />}

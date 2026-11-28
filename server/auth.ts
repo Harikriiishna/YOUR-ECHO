@@ -10,6 +10,8 @@ export interface AuthUser {
   id: string;
   email: string;
   displayName: string;
+  phoneNumber: string | null;
+  authProvider: string;
   bio: string;
   avatarMediaId: string | null;
   locationHint: string;
@@ -17,6 +19,9 @@ export interface AuthUser {
   theme: string;
   emailVerified: boolean;
   aiConsent: boolean;
+  totpEnabled: boolean;
+  totpDisplayName: string | null;
+  totpEnrolledAt: string | null;
   notificationPrefs: Record<string, boolean>;
   createdAt: string;
 }
@@ -136,6 +141,8 @@ export function rowToAuthUser(row: Record<string, unknown>): AuthUser {
     id: String(row.id),
     email: String(row.email),
     displayName: String(row.display_name),
+    phoneNumber: row.phone_number ? String(row.phone_number) : null,
+    authProvider: typeof row.auth_provider === 'string' && row.auth_provider ? row.auth_provider : 'email',
     bio: String(row.bio ?? ''),
     avatarMediaId: row.avatar_media_id ? String(row.avatar_media_id) : null,
     locationHint: String(row.location_hint ?? ''),
@@ -143,6 +150,9 @@ export function rowToAuthUser(row: Record<string, unknown>): AuthUser {
     theme: typeof row.theme === 'string' && row.theme ? row.theme : 'social',
     emailVerified: Boolean(row.email_verified),
     aiConsent: Boolean(row.ai_consent),
+    totpEnabled: Boolean(row.totp_enabled),
+    totpDisplayName: row.totp_display_name ? String(row.totp_display_name) : null,
+    totpEnrolledAt: row.totp_enrolled_at ? String(row.totp_enrolled_at) : null,
     notificationPrefs,
     createdAt: String(row.created_at),
   };

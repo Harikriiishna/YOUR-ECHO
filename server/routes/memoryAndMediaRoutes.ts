@@ -7,10 +7,21 @@ import {
   analyzeMemorySentiment,
   EMOTIONAL_IMPACT_LEVELS,
 } from '../ai.ts';
-import { type AuthenticatedRequest, rateLimit, requireAuth } from '../auth.ts';
+import { type AuthenticatedRequest, optionalAuth, rateLimit, requireAuth } from '../auth.ts';
 import { db, newId, UPLOADS_DIR } from '../db.ts';
 
 export const memoryMediaRouter = Router();
+
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
+function isValidIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return Number.isFinite(dt.getTime()) && dt.toISOString().slice(0, 10) === value;
+}
 
 const ALLOWED_MIME_PREFIXES = ['image/', 'audio/', 'video/'];
 const MAX_FILE_BYTES = 25 * 1024 * 1024; // 25MB
@@ -98,7 +109,7 @@ memoryMediaRouter.get('/media/usage', requireAuth, (req: AuthenticatedRequest, r
   res.json(row);
 });
 
-memoryMediaRouter.get('/media/:id', requireAuth, (req: AuthenticatedRequest, res) => {
+memoryMediaRouter.get('/media/:id', optionalAuth, (req: AuthenticatedRequest, res) => {
   const media = db.prepare('SELECT * FROM media_files WHERE id = ?').get(req.params.id) as
     | {
         id: string;
@@ -115,25 +126,36 @@ memoryMediaRouter.get('/media/:id', requireAuth, (req: AuthenticatedRequest, res
     return;
   }
 
-  const isOwner = media.user_id === req.authUser!.id;
+  const isOwner = Boolean(req.authUser && media.user_id === req.authUser.id);
   if (!isOwner) {
     // Allow viewing only if attached to a public object
     const publicObj = db
       .prepare('SELECT id FROM objects WHERE is_public = 1 AND (photo_media_id = ? OR voice_media_id = ?)')
       .get(media.id, media.id);
     if (!publicObj) {
-      res.status(403).json({ error: 'Access denied.' });
+      res.status(req.authUser ? 403 : 401).json({
+        error: req.authUser ? 'Access denied.' : 'Authentication required.',
+      });
       return;
     }
   }
 
   // Server-side enforcement: block media attached to a locked capsule before its unlock timestamp
-  const lockedCapsule = db
+  const lockedCapsules = db
     .prepare(`
-      SELECT id, unlock_at FROM time_capsules
-      WHERE user_id = ? AND is_locked = 1 AND unlock_at > ? AND media_ids_json LIKE ?
+      SELECT id, media_ids_json FROM time_capsules
+      WHERE user_id = ? AND is_locked = 1 AND unlock_at > ?
     `)
-    .get(media.user_id, new Date().toISOString(), `%${media.id}%`);
+    .all(media.user_id, new Date().toISOString()) as Array<{ id: string; media_ids_json: string }>;
+
+  const lockedCapsule = lockedCapsules.some((cap) => {
+    try {
+      const parsed = JSON.parse(String(cap.media_ids_json || '[]'));
+      return Array.isArray(parsed) && parsed.includes(media.id);
+    } catch {
+      return false;
+    }
+  });
 
   if (lockedCapsule) {
     res.status(403).json({ error: 'This media is sealed inside a locked Time Capsule until its unlock date.' });
@@ -338,8 +360,8 @@ memoryMediaRouter.get('/memories', requireAuth, (req: AuthenticatedRequest, res)
     params.push(month);
   }
   if (q && q.trim()) {
-    const like = `%${q.trim()}%`;
-    wheres.push('(m.title LIKE ? OR m.content LIKE ? OR m.location_name LIKE ? OR EXISTS (SELECT 1 FROM memory_tags t2 WHERE t2.memory_id = m.id AND t2.tag LIKE ?) OR EXISTS (SELECT 1 FROM memory_people p2 WHERE p2.memory_id = m.id AND p2.person_name LIKE ?))');
+    const like = `%${escapeLike(q.trim())}%`;
+    wheres.push("(m.title LIKE ? ESCAPE '\\' OR m.content LIKE ? ESCAPE '\\' OR m.location_name LIKE ? ESCAPE '\\' OR EXISTS (SELECT 1 FROM memory_tags t2 WHERE t2.memory_id = m.id AND t2.tag LIKE ? ESCAPE '\\') OR EXISTS (SELECT 1 FROM memory_people p2 WHERE p2.memory_id = m.id AND p2.person_name LIKE ? ESCAPE '\\'))");
     params.push(like, like, like, like, like);
   }
 
@@ -614,6 +636,10 @@ memoryMediaRouter.post(
       res.status(404).json({ error: 'Memory not found.' });
       return;
     }
+    if (existing.ai_excluded) {
+      res.status(403).json({ error: 'This memory is excluded from AI reading and reflection.' });
+      return;
+    }
 
     const { applyMood } = req.body as { applyMood?: boolean };
     try {
@@ -651,7 +677,8 @@ memoryMediaRouter.post(
 
 memoryMediaRouter.get('/memories/on-this-day', requireAuth, (req: AuthenticatedRequest, res) => {
   const userId = req.authUser!.id;
-  const today = new Date().toISOString();
+  const rawLocalDate = typeof req.query.localDate === 'string' ? req.query.localDate.trim() : '';
+  const today = isValidIsoDate(rawLocalDate) ? rawLocalDate : new Date().toISOString().slice(0, 10);
   const mmdd = today.slice(5, 10);
   const year = today.slice(0, 4);
   const rows = db
@@ -720,6 +747,35 @@ function parseOptionalCoordinate(
     return { ok: false, error: `${label} must be a valid number between ${min} and ${max}.` };
   }
   return { ok: true, value: raw };
+}
+
+function filterOwnedMediaIds(userId: string, rawIds: unknown): string[] {
+  if (!Array.isArray(rawIds)) return [];
+  const candidateIds = Array.from(new Set(rawIds.map((id) => String(id || '').trim()).filter(Boolean))).slice(0, 10);
+  if (candidateIds.length === 0) return [];
+  const rows = db
+    .prepare(`SELECT id FROM media_files WHERE user_id = ? AND id IN (${candidateIds.map(() => '?').join(',')})`)
+    .all(userId, ...candidateIds) as Array<{ id: string }>;
+  const owned = new Set(rows.map((r) => r.id));
+  return candidateIds.filter((id) => owned.has(id));
+}
+
+function resolveOwnedCollectionId(
+  userId: string,
+  collectionId: unknown
+): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (collectionId === null || collectionId === undefined || collectionId === '') {
+    return { ok: true, value: null };
+  }
+  const cleanId = String(collectionId).trim();
+  if (!cleanId) return { ok: true, value: null };
+  const owned = db
+    .prepare('SELECT id FROM memory_collections WHERE id = ? AND user_id = ?')
+    .get(cleanId, userId) as { id: string } | undefined;
+  if (!owned) {
+    return { ok: false, error: 'Selected collection was not found.' };
+  }
+  return { ok: true, value: owned.id };
 }
 
 memoryMediaRouter.post('/memories', requireAuth, async (req: AuthenticatedRequest, res) => {
@@ -802,12 +858,23 @@ memoryMediaRouter.post('/memories', requireAuth, async (req: AuthenticatedReques
     }
   }
 
+  const resolvedCollection = resolveOwnedCollectionId(userId, body.collectionId);
+  if (!resolvedCollection.ok) {
+    res.status(400).json({ error: resolvedCollection.error });
+    return;
+  }
+
   const id = newId('mem');
   const now = new Date().toISOString();
-  const memoryDate = body.memoryDate || now.slice(0, 10);
+  const rawMemoryDate = typeof body.memoryDate === 'string' ? body.memoryDate.trim() : '';
+  if (rawMemoryDate && !isValidIsoDate(rawMemoryDate)) {
+    res.status(400).json({ error: 'Memory date must be a valid YYYY-MM-DD date.' });
+    return;
+  }
+  const memoryDate = rawMemoryDate || now.slice(0, 10);
   const tags = normalizeTags(body.tags);
   const people = Array.isArray(body.people) ? body.people.map((p) => String(p).trim()).filter(Boolean).slice(0, 15) : [];
-  const mediaIds = Array.isArray(body.mediaIds) ? body.mediaIds.filter(Boolean).slice(0, 10) : [];
+  const mediaIds = filterOwnedMediaIds(userId, body.mediaIds);
 
   db.transaction(() => {
     db.prepare(`
@@ -831,7 +898,7 @@ memoryMediaRouter.post('/memories', requireAuth, async (req: AuthenticatedReques
       resolvedImpact,
       resolvedScore,
       resolvedRationale,
-      body.collectionId || null,
+      resolvedCollection.value,
       JSON.stringify(tags),
       JSON.stringify(mediaIds),
       now,
@@ -924,6 +991,31 @@ memoryMediaRouter.put('/memories/:id', requireAuth, (req: AuthenticatedRequest, 
         : null
       : existing.sentiment_score;
 
+  let nextCollectionId: string | null = existing.collection_id ? String(existing.collection_id) : null;
+  if (body.collectionId !== undefined) {
+    const resolvedCollection = resolveOwnedCollectionId(userId, body.collectionId);
+    if (!resolvedCollection.ok) {
+      res.status(400).json({ error: resolvedCollection.error });
+      return;
+    }
+    nextCollectionId = resolvedCollection.value;
+  }
+
+  const nextMediaIdsJson =
+    body.mediaIds !== undefined
+      ? JSON.stringify(filterOwnedMediaIds(userId, body.mediaIds))
+      : String(existing.media_ids_json);
+
+  let nextMemoryDate = String(existing.memory_date);
+  if (body.memoryDate !== undefined) {
+    const cleanDate = String(body.memoryDate).trim();
+    if (!isValidIsoDate(cleanDate)) {
+      res.status(400).json({ error: 'Memory date must be a valid YYYY-MM-DD date.' });
+      return;
+    }
+    nextMemoryDate = cleanDate;
+  }
+
   const now = new Date().toISOString();
   db.transaction(() => {
     db.prepare(`
@@ -933,7 +1025,7 @@ memoryMediaRouter.put('/memories/:id', requireAuth, (req: AuthenticatedRequest, 
     `).run(
       nextTitle.slice(0, 160),
       nextContent,
-      body.memoryDate ?? String(existing.memory_date),
+      nextMemoryDate,
       (body.locationName ?? String(existing.location_name)).slice(0, 140),
       nextLat,
       nextLng,
@@ -948,8 +1040,8 @@ memoryMediaRouter.put('/memories/:id', requireAuth, (req: AuthenticatedRequest, 
       body.sentimentRationale !== undefined
         ? body.sentimentRationale.slice(0, 280)
         : String(existing.sentiment_rationale || ''),
-      body.collectionId !== undefined ? body.collectionId : existing.collection_id,
-      body.mediaIds !== undefined ? JSON.stringify(body.mediaIds) : String(existing.media_ids_json),
+      nextCollectionId,
+      nextMediaIdsJson,
       now,
       req.params.id,
       userId
@@ -1038,10 +1130,11 @@ memoryMediaRouter.post('/memories/:id/favorite', requireAuth, (req: Authenticate
     return;
   }
   const nextVal = existing.is_favorite ? 0 : 1;
-  db.prepare('UPDATE memories SET is_favorite = ?, updated_at = ? WHERE id = ?').run(
+  db.prepare('UPDATE memories SET is_favorite = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(
     nextVal,
     new Date().toISOString(),
-    req.params.id
+    req.params.id,
+    req.authUser!.id
   );
   res.json({ isFavorite: Boolean(nextVal) });
 });

@@ -6,6 +6,17 @@ import { db, newId } from '../db.ts';
 
 export const objectDreamAndSyncRouter = Router();
 
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
+function isValidIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  return Number.isFinite(dt.getTime()) && dt.toISOString().slice(0, 10) === value;
+}
+
 function safeJsonArray(val: unknown): string[] {
   try {
     const parsed = JSON.parse(String(val || '[]'));
@@ -13,6 +24,25 @@ function safeJsonArray(val: unknown): string[] {
   } catch {
     return [];
   }
+}
+
+function filterOwnedMediaId(userId: string, rawId: unknown): string | null {
+  if (typeof rawId !== 'string' || !rawId.trim()) return null;
+  const row = db
+    .prepare('SELECT id FROM media_files WHERE id = ? AND user_id = ?')
+    .get(rawId.trim(), userId) as { id: string } | undefined;
+  return row ? row.id : null;
+}
+
+function filterOwnedMemoryIds(userId: string, rawIds: unknown): string[] {
+  if (!Array.isArray(rawIds)) return [];
+  const candidateIds = Array.from(new Set(rawIds.map((id) => String(id || '').trim()).filter(Boolean))).slice(0, 20);
+  if (candidateIds.length === 0) return [];
+  const rows = db
+    .prepare(`SELECT id FROM memories WHERE user_id = ? AND id IN (${candidateIds.map(() => '?').join(',')})`)
+    .all(userId, ...candidateIds) as Array<{ id: string }>;
+  const owned = new Set(rows.map((r) => r.id));
+  return candidateIds.filter((id) => owned.has(id));
 }
 
 function hydrateObjectRow(row: Record<string, unknown>) {
@@ -35,7 +65,7 @@ function hydrateObjectRow(row: Record<string, unknown>) {
     isPublic: Boolean(row.is_public),
     shareSlug: row.share_slug ? String(row.share_slug) : null,
     createdAt: String(row.created_at),
-    updatedAt: String(row.updated_at),
+    updatedAt: String(row.updated_at ?? row.created_at),
   };
 }
 
@@ -51,8 +81,8 @@ objectDreamAndSyncRouter.get('/objects', requireAuth, (req: AuthenticatedRequest
     params.push(category);
   }
   if (q && q.trim()) {
-    const like = `%${q.trim()}%`;
-    wheres.push('(name LIKE ? OR story LIKE ? OR description LIKE ? OR current_owner LIKE ? OR location LIKE ?)');
+    const like = `%${escapeLike(q.trim())}%`;
+    wheres.push("(name LIKE ? ESCAPE '\\' OR story LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\' OR current_owner LIKE ? ESCAPE '\\' OR location LIKE ? ESCAPE '\\')");
     params.push(like, like, like, like, like);
   }
 
@@ -91,6 +121,10 @@ objectDreamAndSyncRouter.post('/objects', requireAuth, (req: AuthenticatedReques
   const slug = `echo-${crypto.randomBytes(5).toString('hex')}`;
   const now = new Date().toISOString();
 
+  const cleanPhotoMediaId = filterOwnedMediaId(req.authUser!.id, body.photoMediaId);
+  const cleanVoiceMediaId = filterOwnedMediaId(req.authUser!.id, body.voiceMediaId);
+  const cleanRelatedMemoryIds = filterOwnedMemoryIds(req.authUser!.id, body.relatedMemoryIds);
+
   db.prepare(`
     INSERT INTO objects (id, user_id, name, category, photo_media_id, voice_media_id, description, story, acquisition_date, current_owner, previous_owners_json, connected_people_json, location, historical_notes, related_memory_ids_json, tags_json, is_public, share_slug, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -99,8 +133,8 @@ objectDreamAndSyncRouter.post('/objects', requireAuth, (req: AuthenticatedReques
     req.authUser!.id,
     body.name.trim().slice(0, 140),
     (body.category || 'Other').slice(0, 50),
-    body.photoMediaId || null,
-    body.voiceMediaId || null,
+    cleanPhotoMediaId,
+    cleanVoiceMediaId,
     (body.description || '').slice(0, 500),
     body.story.trim(),
     (body.acquisitionDate || '').slice(0, 40),
@@ -109,7 +143,7 @@ objectDreamAndSyncRouter.post('/objects', requireAuth, (req: AuthenticatedReques
     JSON.stringify(Array.isArray(body.connectedPeople) ? body.connectedPeople.filter(Boolean).slice(0, 20) : []),
     (body.location || '').slice(0, 140),
     (body.historicalNotes || '').slice(0, 1500),
-    JSON.stringify(Array.isArray(body.relatedMemoryIds) ? body.relatedMemoryIds.filter(Boolean).slice(0, 20) : []),
+    JSON.stringify(cleanRelatedMemoryIds),
     JSON.stringify(Array.isArray(body.tags) ? body.tags.filter(Boolean).slice(0, 15) : []),
     body.isPublic ? 1 : 0,
     slug,
@@ -148,8 +182,8 @@ objectDreamAndSyncRouter.put('/objects/:id', requireAuth, (req: AuthenticatedReq
   `).run(
     nextName.slice(0, 140),
     String(body.category ?? existing.category).slice(0, 50),
-    body.photoMediaId !== undefined ? (body.photoMediaId as string | null) : (existing.photo_media_id as string | null),
-    body.voiceMediaId !== undefined ? (body.voiceMediaId as string | null) : (existing.voice_media_id as string | null),
+    body.photoMediaId !== undefined ? filterOwnedMediaId(req.authUser!.id, body.photoMediaId) : (existing.photo_media_id as string | null),
+    body.voiceMediaId !== undefined ? filterOwnedMediaId(req.authUser!.id, body.voiceMediaId) : (existing.voice_media_id as string | null),
     String(body.description ?? existing.description).slice(0, 500),
     nextStory,
     String(body.acquisitionDate ?? existing.acquisition_date).slice(0, 40),
@@ -158,7 +192,9 @@ objectDreamAndSyncRouter.put('/objects/:id', requireAuth, (req: AuthenticatedReq
     Array.isArray(body.connectedPeople) ? JSON.stringify(body.connectedPeople) : String(existing.connected_people_json),
     String(body.location ?? existing.location).slice(0, 140),
     String(body.historicalNotes ?? existing.historical_notes).slice(0, 1500),
-    Array.isArray(body.relatedMemoryIds) ? JSON.stringify(body.relatedMemoryIds) : String(existing.related_memory_ids_json),
+    Array.isArray(body.relatedMemoryIds)
+      ? JSON.stringify(filterOwnedMemoryIds(req.authUser!.id, body.relatedMemoryIds))
+      : String(existing.related_memory_ids_json),
     Array.isArray(body.tags) ? JSON.stringify(body.tags) : String(existing.tags_json),
     body.isPublic !== undefined ? (body.isPublic ? 1 : 0) : existing.is_public,
     now,
@@ -179,33 +215,47 @@ objectDreamAndSyncRouter.get('/objects/:id/qrcode', requireAuth, async (req: Aut
   const obj = db
     .prepare('SELECT id, name, share_slug, is_public FROM objects WHERE id = ? AND user_id = ?')
     .get(req.params.id, req.authUser!.id) as
-    | { id: string; name: string; share_slug: string; is_public: number }
+    | { id: string; name: string; share_slug: string | null; is_public: number }
     | undefined;
   if (!obj) {
     res.status(404).json({ error: 'Object not found.' });
     return;
   }
 
-  const baseUrl = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
-  const shareUrl = `${baseUrl}/?sharedObject=${encodeURIComponent(obj.share_slug)}`;
-  const qrDataUrl = await QRCode.toDataURL(shareUrl, {
-    width: 320,
-    margin: 2,
-    color: { dark: '#070B14', light: '#F8FAFC' },
-  });
+  let slug = obj.share_slug;
+  if (!slug) {
+    slug = `echo-${crypto.randomBytes(5).toString('hex')}`;
+    db.prepare('UPDATE objects SET share_slug = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(
+      slug,
+      new Date().toISOString(),
+      obj.id,
+      req.authUser!.id
+    );
+  }
 
-  res.json({ qrDataUrl, shareUrl, isPublic: Boolean(obj.is_public) });
+  const baseUrl = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+  const shareUrl = `${baseUrl}/?sharedObject=${encodeURIComponent(slug)}`;
+  try {
+    const qrDataUrl = await QRCode.toDataURL(shareUrl, {
+      width: 320,
+      margin: 2,
+      color: { dark: '#070B14', light: '#F8FAFC' },
+    });
+    res.json({ qrDataUrl, shareUrl, isPublic: Boolean(obj.is_public) });
+  } catch {
+    res.status(500).json({ error: 'Unable to generate QR code.' });
+  }
 });
 
 objectDreamAndSyncRouter.get('/shared/object/:slug', (req, res) => {
   const row = db
-    .prepare('SELECT id, name, category, photo_media_id, description, story, acquisition_date, current_owner, previous_owners_json, location, historical_notes, tags_json, created_at FROM objects WHERE share_slug = ? AND is_public = 1')
+    .prepare('SELECT id, name, category, photo_media_id, voice_media_id, description, story, acquisition_date, current_owner, previous_owners_json, connected_people_json, location, historical_notes, tags_json, share_slug, created_at, updated_at FROM objects WHERE share_slug = ? AND is_public = 1')
     .get(req.params.slug) as Record<string, unknown> | undefined;
   if (!row) {
     res.status(404).json({ error: 'Shared object story not found or is private.' });
     return;
   }
-  res.json({ object: hydrateObjectRow({ ...row, is_public: 1 }) });
+  res.json({ object: hydrateObjectRow({ ...row, related_memory_ids_json: '[]', is_public: 1 }) });
 });
 
 // ==================== DREAM ARCHIVE ====================
@@ -244,8 +294,8 @@ objectDreamAndSyncRouter.get('/dreams', requireAuth, (req: AuthenticatedRequest,
     wheres.push('is_recurring = 1');
   }
   if (q && q.trim()) {
-    const like = `%${q.trim()}%`;
-    wheres.push('(title LIKE ? OR content LIKE ? OR location LIKE ? OR tags_json LIKE ?)');
+    const like = `%${escapeLike(q.trim())}%`;
+    wheres.push("(title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\' OR location LIKE ? ESCAPE '\\' OR tags_json LIKE ? ESCAPE '\\')");
     params.push(like, like, like, like);
   }
 
@@ -323,7 +373,15 @@ objectDreamAndSyncRouter.post('/dreams', requireAuth, (req: AuthenticatedRequest
 
   const id = newId('drm');
   const now = new Date().toISOString();
+  const rawDreamDate = typeof body.dreamDate === 'string' ? body.dreamDate.trim() : '';
+  if (rawDreamDate && !isValidIsoDate(rawDreamDate)) {
+    res.status(400).json({ error: 'Dream date must be a valid YYYY-MM-DD date.' });
+    return;
+  }
   const tags = Array.isArray(body.tags) ? body.tags.map((t) => String(t).trim()).filter(Boolean).slice(0, 15) : [];
+
+  const cleanImageMediaId = filterOwnedMediaId(userId, body.imageMediaId);
+  const cleanVoiceMediaId = filterOwnedMediaId(userId, body.voiceMediaId);
 
   db.transaction(() => {
     db.prepare(`
@@ -334,15 +392,15 @@ objectDreamAndSyncRouter.post('/dreams', requireAuth, (req: AuthenticatedRequest
       userId,
       body.title!.trim().slice(0, 160),
       body.content!.trim(),
-      body.dreamDate || now.slice(0, 10),
+      rawDreamDate || now.slice(0, 10),
       (body.emotion || 'Wonder').slice(0, 40),
       (body.location || '').slice(0, 120),
       (body.category || 'Lucid').slice(0, 40),
       Math.min(Math.max(Number(body.vividness) || 3, 1), 5),
       body.isRecurring ? 1 : 0,
       JSON.stringify(tags),
-      body.imageMediaId || null,
-      body.voiceMediaId || null,
+      cleanImageMediaId,
+      cleanVoiceMediaId,
       (body.transcript || '').slice(0, 4000),
       (body.aiReflection || '').slice(0, 2000),
       now,
@@ -380,6 +438,16 @@ objectDreamAndSyncRouter.put('/dreams/:id', requireAuth, (req: AuthenticatedRequ
     return;
   }
 
+  let nextDreamDate = String(existing.dream_date);
+  if (body.dreamDate !== undefined) {
+    const cleanDate = String(body.dreamDate).trim();
+    if (!isValidIsoDate(cleanDate)) {
+      res.status(400).json({ error: 'Dream date must be a valid YYYY-MM-DD date.' });
+      return;
+    }
+    nextDreamDate = cleanDate;
+  }
+
   db.prepare(`
     UPDATE dreams
     SET title = ?, content = ?, dream_date = ?, emotion = ?, location = ?, category = ?, vividness = ?, is_recurring = ?, tags_json = ?, ai_reflection = ?, updated_at = ?
@@ -387,7 +455,7 @@ objectDreamAndSyncRouter.put('/dreams/:id', requireAuth, (req: AuthenticatedRequ
   `).run(
     nextTitle.slice(0, 160),
     nextContent,
-    String(body.dreamDate ?? existing.dream_date),
+    nextDreamDate,
     String(body.emotion ?? existing.emotion),
     String(body.location ?? existing.location),
     String(body.category ?? existing.category),
@@ -419,36 +487,48 @@ objectDreamAndSyncRouter.get('/search', requireAuth, (req: AuthenticatedRequest,
     return;
   }
 
-  const like = `%${q}%`;
+  const like = `%${escapeLike(q)}%`;
   const nowIso = new Date().toISOString();
 
   const memories = db
-    .prepare("SELECT id, title, memory_date AS date, category AS subtitle FROM memories WHERE user_id = ? AND (title LIKE ? OR content LIKE ? OR location_name LIKE ?) LIMIT 8")
+    .prepare("SELECT id, title, memory_date AS date, category AS subtitle FROM memories WHERE user_id = ? AND (title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\' OR location_name LIKE ? ESCAPE '\\') LIMIT 8")
     .all(userId, like, like, like) as Array<Record<string, unknown>>;
 
   const capsules = db
-    .prepare("SELECT id, title, unlock_at AS date, capsule_type AS subtitle FROM time_capsules WHERE user_id = ? AND (title LIKE ? OR ((is_locked = 0 OR unlock_at <= ?) AND message LIKE ?)) LIMIT 6")
+    .prepare("SELECT id, title, unlock_at AS date, capsule_type AS subtitle FROM time_capsules WHERE user_id = ? AND (title LIKE ? ESCAPE '\\' OR ((is_locked = 0 OR unlock_at <= ?) AND message LIKE ? ESCAPE '\\')) LIMIT 6")
     .all(userId, like, nowIso, like) as Array<Record<string, unknown>>;
 
   const objects = db
-    .prepare("SELECT id, name AS title, acquisition_date AS date, category AS subtitle FROM objects WHERE user_id = ? AND (name LIKE ? OR story LIKE ? OR description LIKE ?) LIMIT 6")
+    .prepare("SELECT id, name AS title, acquisition_date AS date, category AS subtitle FROM objects WHERE user_id = ? AND (name LIKE ? ESCAPE '\\' OR story LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\') LIMIT 6")
     .all(userId, like, like, like) as Array<Record<string, unknown>>;
 
   const dreams = db
-    .prepare("SELECT id, title, dream_date AS date, emotion AS subtitle FROM dreams WHERE user_id = ? AND (title LIKE ? OR content LIKE ? OR tags_json LIKE ?) LIMIT 6")
+    .prepare("SELECT id, title, dream_date AS date, emotion AS subtitle FROM dreams WHERE user_id = ? AND (title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\' OR tags_json LIKE ? ESCAPE '\\') LIMIT 6")
     .all(userId, like, like, like) as Array<Record<string, unknown>>;
 
   const wisdom = db
-    .prepare("SELECT id, title, created_at AS date, category AS subtitle FROM wisdom_posts WHERE (title LIKE ? OR content LIKE ?) AND author_id NOT IN (SELECT blocked_user_id FROM user_blocks WHERE blocker_id = ?) LIMIT 6")
+    .prepare("SELECT id, title, created_at AS date, category AS subtitle FROM wisdom_posts WHERE (title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\') AND author_id NOT IN (SELECT blocked_user_id FROM user_blocks WHERE blocker_id = ?) LIMIT 6")
     .all(like, like, userId) as Array<Record<string, unknown>>;
 
   const humanity = db
-    .prepare("SELECT id, title, created_at AS date, approx_region AS subtitle FROM humanity_posts WHERE (title LIKE ? OR content LIKE ?) AND author_id NOT IN (SELECT blocked_user_id FROM user_blocks WHERE blocker_id = ?) LIMIT 6")
+    .prepare("SELECT id, title, created_at AS date, approx_region AS subtitle FROM humanity_posts WHERE (title LIKE ? ESCAPE '\\' OR content LIKE ? ESCAPE '\\') AND author_id NOT IN (SELECT blocked_user_id FROM user_blocks WHERE blocker_id = ?) LIMIT 6")
     .all(like, like, userId) as Array<Record<string, unknown>>;
 
-  const skills = db
-    .prepare("SELECT sp.user_id AS id, u.display_name AS title, sp.updated_at AS date, sp.teach_skills_json AS subtitle FROM skill_profiles sp JOIN users u ON u.id = sp.user_id WHERE sp.user_id != ? AND (u.display_name LIKE ? OR sp.teach_skills_json LIKE ? OR sp.learn_skills_json LIKE ?) LIMIT 6")
-    .all(userId, like, like, like) as Array<Record<string, unknown>>;
+  const skillsRaw = db
+    .prepare(
+      "SELECT sp.user_id AS id, u.display_name AS title, sp.updated_at AS date, sp.teach_skills_json AS teach_skills_json FROM skill_profiles sp JOIN users u ON u.id = sp.user_id WHERE sp.user_id != ? AND sp.user_id NOT IN (SELECT blocked_user_id FROM user_blocks WHERE blocker_id = ?) AND (u.display_name LIKE ? ESCAPE '\\' OR sp.teach_skills_json LIKE ? ESCAPE '\\' OR sp.learn_skills_json LIKE ? ESCAPE '\\') LIMIT 6"
+    )
+    .all(userId, userId, like, like, like) as Array<Record<string, unknown>>;
+
+  const skills = skillsRaw.map((r) => {
+    const taught = safeJsonArray(r.teach_skills_json).slice(0, 3);
+    return {
+      id: r.id,
+      title: r.title,
+      date: r.date,
+      subtitle: taught.length > 0 ? `Teaches: ${taught.join(', ')}` : 'SkillSwap member',
+    };
+  });
 
   const results = [
     ...memories.map((r) => ({ ...r, module: 'memories' })),

@@ -14,6 +14,17 @@ import { pushNotification } from '../ws.ts';
 
 export const capsuleAndAiRouter = Router();
 
+function filterOwnedCapsuleMediaIds(userId: string, rawIds: unknown): string[] {
+  if (!Array.isArray(rawIds)) return [];
+  const candidateIds = Array.from(new Set(rawIds.map((id) => String(id || '').trim()).filter(Boolean))).slice(0, 10);
+  if (candidateIds.length === 0) return [];
+  const rows = db
+    .prepare(`SELECT id FROM media_files WHERE user_id = ? AND id IN (${candidateIds.map(() => '?').join(',')})`)
+    .all(userId, ...candidateIds) as Array<{ id: string }>;
+  const owned = new Set(rows.map((r) => r.id));
+  return candidateIds.filter((id) => owned.has(id));
+}
+
 function serializeCapsule(row: Record<string, unknown>) {
   const isLocked = Boolean(row.is_locked);
   const unlockAt = String(row.unlock_at);
@@ -65,8 +76,10 @@ capsuleAndAiRouter.get('/capsules', requireAuth, (req: AuthenticatedRequest, res
     .prepare('SELECT id, title FROM time_capsules WHERE user_id = ? AND is_locked = 1 AND unlock_at <= ? AND unlocked_notified = 0')
     .all(userId, nowIso) as Array<{ id: string; title: string }>;
 
+  const markNotifiedStmt = db.prepare('UPDATE time_capsules SET unlocked_notified = 1 WHERE id = ? AND unlocked_notified = 0');
   for (const cap of due) {
-    db.prepare('UPDATE time_capsules SET unlocked_notified = 1 WHERE id = ?').run(cap.id);
+    const upd = markNotifiedStmt.run(cap.id);
+    if (upd.changes !== 1) continue;
     const notifId = newId('notif');
     const createdAt = new Date().toISOString();
     db.prepare(`
@@ -131,7 +144,7 @@ capsuleAndAiRouter.post('/capsules', requireAuth, (req: AuthenticatedRequest, re
 
   const id = newId('cap');
   const now = new Date().toISOString();
-  const cleanMedia = Array.isArray(mediaIds) ? mediaIds.filter(Boolean).slice(0, 10) : [];
+  const cleanMedia = filterOwnedCapsuleMediaIds(req.authUser!.id, mediaIds);
 
   db.prepare(`
     INSERT INTO time_capsules (id, user_id, title, message, capsule_type, unlock_occasion, unlock_at, timezone, is_locked, media_ids_json, created_at, updated_at)
@@ -207,7 +220,9 @@ capsuleAndAiRouter.put('/capsules/:id', requireAuth, (req: AuthenticatedRequest,
     unlockOccasion ?? String(existing.unlock_occasion),
     nextUnlock,
     timezone ?? String(existing.timezone),
-    Array.isArray(mediaIds) ? JSON.stringify(mediaIds) : String(existing.media_ids_json),
+    Array.isArray(mediaIds)
+      ? JSON.stringify(filterOwnedCapsuleMediaIds(req.authUser!.id, mediaIds))
+      : String(existing.media_ids_json),
     new Date().toISOString(),
     req.params.id,
     req.authUser!.id
@@ -256,9 +271,16 @@ capsuleAndAiRouter.post('/capsules/:id/open', requireAuth, (req: AuthenticatedRe
 
   const now = new Date().toISOString();
   if (!existing.opened_at) {
-    db.prepare('UPDATE time_capsules SET opened_at = ?, updated_at = ? WHERE id = ?').run(now, now, req.params.id);
+    db.prepare('UPDATE time_capsules SET opened_at = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(
+      now,
+      now,
+      req.params.id,
+      req.authUser!.id
+    );
   }
-  const updated = db.prepare('SELECT * FROM time_capsules WHERE id = ?').get(req.params.id) as Record<string, unknown>;
+  const updated = db
+    .prepare('SELECT * FROM time_capsules WHERE id = ? AND user_id = ?')
+    .get(req.params.id, req.authUser!.id) as Record<string, unknown>;
   res.json({ capsule: serializeCapsule(updated) });
 });
 
@@ -409,8 +431,13 @@ capsuleAndAiRouter.post('/ai/transcribe', requireAuth, rateLimit('ai', 15, 60_00
   try {
     const buf = fs.readFileSync(resolvedPath);
     const transcript = await transcribeAudioBuffer(buf, media.mime_type);
-    db.prepare('UPDATE media_files SET transcript = ? WHERE id = ?').run(transcript, media.id);
-    res.json({ transcript });
+    if (transcript) {
+      db.prepare('UPDATE media_files SET transcript = ? WHERE id = ?').run(transcript, media.id);
+    }
+    res.json({
+      transcript,
+      fallbackMode: transcript ? 'cloud' : 'browser_speech',
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Audio transcription failed.';
     res.status(502).json({ error: message });
@@ -460,9 +487,13 @@ capsuleAndAiRouter.post(
       typeof (req.body as { localDate?: string })?.localDate === 'string'
         ? (req.body as { localDate?: string }).localDate!.trim()
         : '';
-    const localDate = /^\d{4}-\d{2}-\d{2}$/.test(rawLocalDate)
-      ? rawLocalDate
-      : new Date().toISOString().slice(0, 10);
+    const isValidLocalDate = (() => {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(rawLocalDate)) return false;
+      const [yy, mm, dd] = rawLocalDate.split('-').map(Number);
+      const dt = new Date(Date.UTC(yy, mm - 1, dd));
+      return Number.isFinite(dt.getTime()) && dt.toISOString().slice(0, 10) === rawLocalDate;
+    })();
+    const localDate = isValidLocalDate ? rawLocalDate : new Date().toISOString().slice(0, 10);
 
     const [y, m, d] = localDate.split('-').map(Number);
     const start30Date = new Date(Date.UTC(y, m - 1, d - 29)).toISOString().slice(0, 10);

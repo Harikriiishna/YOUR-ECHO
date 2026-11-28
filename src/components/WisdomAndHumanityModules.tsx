@@ -12,6 +12,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import humanityLanternsImg from '../assets/images/echo_humanity_lanterns_1795260972998.jpg';
 import { useEcho } from '../context/EchoContext';
 import { apiRequest } from '../lib/api';
 import type { HumanityPost, WisdomPost } from '../types/echo';
@@ -234,17 +235,30 @@ export function StrangersWisdomModule() {
         </div>
 
         <div className="flex items-center gap-2 min-w-0 w-full lg:w-auto shrink-0">
-          <div className="relative flex-1 min-w-0 sm:w-52">
-            <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && void loadPosts()}
-              placeholder="Search wisdom..."
-              className="w-full rounded-xl border border-hairline-strong bg-surface pl-8 pr-3 py-2 text-xs text-ink"
-            />
-          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void loadPosts();
+            }}
+            className="flex items-center gap-1.5 flex-1 min-w-0"
+          >
+            <div className="relative flex-1 min-w-0 sm:w-48">
+              <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search wisdom..."
+                className="w-full rounded-xl border border-hairline-strong bg-surface pl-8 pr-3 py-2 text-xs text-ink"
+              />
+            </div>
+            <button
+              type="submit"
+              className="rounded-xl border border-hairline-strong bg-surface px-3 py-2 text-xs font-medium text-ink-secondary hover:text-ink shrink-0"
+            >
+              Search
+            </button>
+          </form>
           <button
             type="button"
             onClick={() => setSavedOnly((prev) => !prev)}
@@ -589,7 +603,7 @@ export function HumanityFeedModule() {
     <div className="space-y-6 min-w-0 w-full">
       <div className="relative overflow-hidden rounded-2xl border border-hairline bg-[#0D1424] w-full">
         <SafeImage
-          src="/src/assets/images/echo_humanity_lanterns_1795260972998.jpg"
+          src={humanityLanternsImg}
           alt="Warm paper lanterns floating above a calm harbor at night"
           className="absolute inset-0 w-full h-full object-cover opacity-35"
         />
@@ -682,17 +696,30 @@ export function HumanityFeedModule() {
         </div>
 
         <div className="flex items-center gap-2 min-w-0 w-full lg:w-auto shrink-0">
-          <div className="relative flex-1 min-w-0 sm:w-52">
-            <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && void loadPosts()}
-              placeholder="Search stories..."
-              className="w-full rounded-xl border border-hairline-strong bg-surface pl-8 pr-3 py-2 text-xs text-ink"
-            />
-          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void loadPosts();
+            }}
+            className="flex items-center gap-1.5 flex-1 min-w-0"
+          >
+            <div className="relative flex-1 min-w-0 sm:w-48">
+              <Search className="w-3.5 h-3.5 text-ink-muted absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search stories..."
+                className="w-full rounded-xl border border-hairline-strong bg-surface pl-8 pr-3 py-2 text-xs text-ink"
+              />
+            </div>
+            <button
+              type="submit"
+              className="rounded-xl border border-hairline-strong bg-surface px-3 py-2 text-xs font-medium text-ink-secondary hover:text-ink shrink-0"
+            >
+              Search
+            </button>
+          </form>
           <button
             type="button"
             onClick={() => setSavedOnly((s) => !s)}

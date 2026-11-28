@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { apiRequest, uploadMediaFile } from '../lib/api';
+import { startBrowserSpeechCapture, type LiveSpeechCaptureSession } from '../lib/browserSpeech';
 import type { ModuleId } from '../types/echo';
 
 export interface DailyCheckInEntry {
@@ -257,6 +258,8 @@ export function DailyCheckInCard({
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const cancelledRef = useRef(false);
+  const speechCaptureRef = useRef<LiveSpeechCaptureSession | null>(null);
+  const liveTranscriptRef = useRef<string>('');
 
   const cleanupRecording = () => {
     if (timerRef.current !== null) {
@@ -272,6 +275,8 @@ export function DailyCheckInCard({
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
+      speechCaptureRef.current?.cancel();
+      speechCaptureRef.current = null;
       if (recorderRef.current && recorderRef.current.state !== 'inactive') {
         try {
           recorderRef.current.stop();
@@ -287,29 +292,41 @@ export function DailyCheckInCard({
   const todayEntry = checkIn?.todayEntry || null;
   const showComposer = !todayEntry || composingAnother;
 
-  const transcribeVoiceBlob = async (blob: Blob, filename: string) => {
+  const transcribeVoiceBlob = async (
+    blob: Blob,
+    filename: string,
+    browserTranscript = ''
+  ) => {
     setVoiceError(null);
     try {
       setVoiceState('uploading');
       const uploaded = await uploadMediaFile(blob, filename, 'memory');
 
       setVoiceState('transcribing');
-      const tr = await apiRequest<{ transcript: string }>('/ai/transcribe', {
-        method: 'POST',
-        body: JSON.stringify({ mediaId: uploaded.id }),
-      });
+      let serverTranscript = '';
+      try {
+        const tr = await apiRequest<{ transcript: string }>('/ai/transcribe', {
+          method: 'POST',
+          body: JSON.stringify({ mediaId: uploaded.id }),
+        });
+        serverTranscript = (tr.transcript || '').trim();
+      } catch {
+        // Ignore cloud transcription failures and fall back to browser speech transcript
+      }
 
-      const transcript = (tr.transcript || '').trim();
+      setVoiceMediaIds((prev) => [...prev, uploaded.id]);
+      const transcript = (serverTranscript || browserTranscript).trim();
       if (!transcript) {
-        setVoiceError('No clear speech was detected in that recording. Please try again.');
+        setVoiceError(
+          'Voice recording attached. Add a short written note or type your reflection below.'
+        );
         return;
       }
 
       setAnswer((prev) => (prev.trim() ? `${prev.trim()}\n\n${transcript}` : transcript));
-      setVoiceMediaIds((prev) => [...prev, uploaded.id]);
     } catch (err) {
       setVoiceError(
-        err instanceof Error ? err.message : 'Unable to transcribe your voice recording.'
+        err instanceof Error ? err.message : 'Unable to process your voice recording.'
       );
     } finally {
       setVoiceState('idle');
@@ -343,6 +360,9 @@ export function DailyCheckInCard({
       recorder.onstop = () => {
         const finalMime = recorder.mimeType || mimeType || 'audio/webm';
         const blob = new Blob(chunksRef.current, { type: finalMime });
+        const capturedSpeech = speechCaptureRef.current?.stop() || '';
+        speechCaptureRef.current = null;
+        liveTranscriptRef.current = capturedSpeech;
         cleanupRecording();
 
         if (cancelledRef.current) {
@@ -356,15 +376,19 @@ export function DailyCheckInCard({
         }
 
         const ext = extensionForMime(finalMime);
-        void transcribeVoiceBlob(blob, `checkin-voice-${Date.now()}.${ext}`);
+        void transcribeVoiceBlob(blob, `checkin-voice-${Date.now()}.${ext}`, capturedSpeech);
       };
 
       recorderRef.current = recorder;
+      liveTranscriptRef.current = '';
       recorder.start(250);
+      speechCaptureRef.current = startBrowserSpeechCapture();
       setRecordingSeconds(0);
       setVoiceState('recording');
       timerRef.current = window.setInterval(() => setRecordingSeconds((s) => s + 1), 1000);
     } catch {
+      speechCaptureRef.current?.cancel();
+      speechCaptureRef.current = null;
       cleanupRecording();
       setVoiceState('idle');
       setVoiceError('Microphone access was denied or unavailable.');
@@ -385,6 +409,9 @@ export function DailyCheckInCard({
   const cancelVoiceRecording = () => {
     if (voiceState !== 'recording') return;
     cancelledRef.current = true;
+    speechCaptureRef.current?.cancel();
+    speechCaptureRef.current = null;
+    liveTranscriptRef.current = '';
     if (recorderRef.current && recorderRef.current.state !== 'inactive') {
       recorderRef.current.stop();
     } else {

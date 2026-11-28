@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Clock, Edit3, Lock, Plus, Sparkles, Trash2, Unlock, X } from 'lucide-react';
+import capsuleVaultImg from '../assets/images/echo_capsule_vault_1795260972711.jpg';
 import { useEcho } from '../context/EchoContext';
 import { apiRequest } from '../lib/api';
 import type { MediaMeta, TimeCapsuleItem } from '../types/echo';
@@ -190,7 +191,7 @@ export function TimeCapsuleModule() {
     <div className="space-y-6 min-w-0 w-full">
       <div className="relative overflow-hidden rounded-2xl border border-hairline bg-[#0D1424] w-full">
         <SafeImage
-          src="/src/assets/images/echo_capsule_vault_1795260972711.jpg"
+          src={capsuleVaultImg}
           alt="Brushed titanium and amber glass time capsule"
           className="absolute inset-0 w-full h-full object-cover opacity-35"
         />
@@ -362,7 +363,7 @@ export function TimeCapsuleModule() {
             {openingCapsule.media.length > 0 && (
               <div className="space-y-3 pt-2">
                 {openingCapsule.media.map((med) => (
-                  <AuthMedia key={med.id} mediaId={med.id} mimeTypeHint={med.mime_type} />
+                  <AuthMedia key={med.id} mediaId={med.id} mimeTypeHint={med.mime_type || med.mimeType} />
                 ))}
               </div>
             )}

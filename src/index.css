@@ -342,11 +342,33 @@
   background: rgba(148, 163, 184, 0.42);
 }
 
+@keyframes echo-memory-card-enter {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.echo-memory-card-enter {
+  animation: echo-memory-card-enter 320ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  will-change: transform, opacity;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  .echo-memory-card-enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
 
@@ -357,9 +379,20 @@
   font-family: var(--font-body);
 }
 
-.echo-leaflet-pin {
+.echo-leaflet-pin,
+.echo-leaflet-cluster {
   background: transparent;
   border: 0;
+}
+
+.echo-leaflet-pin-inner,
+.echo-leaflet-cluster-orb {
+  transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms ease;
+}
+
+.echo-leaflet-pin:hover .echo-leaflet-pin-inner,
+.echo-leaflet-cluster:hover .echo-leaflet-cluster-orb {
+  transform: scale(1.1);
 }
 
 .leaflet-popup-content-wrapper,

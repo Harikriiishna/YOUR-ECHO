@@ -3,6 +3,7 @@ import type { EchoThemeId } from '../lib/themes';
 export type ModuleId =
   | 'home'
   | 'memories'
+  | 'memory-map'
   | 'ai'
   | 'capsules'
   | 'wisdom'
@@ -17,6 +18,8 @@ export interface AuthUser {
   id: string;
   email: string;
   displayName: string;
+  phoneNumber?: string | null;
+  authProvider?: string;
   bio: string;
   avatarMediaId: string | null;
   locationHint: string;
@@ -24,8 +27,26 @@ export interface AuthUser {
   theme?: EchoThemeId;
   emailVerified: boolean;
   aiConsent: boolean;
+  totpEnabled?: boolean;
+  totpDisplayName?: string | null;
+  totpEnrolledAt?: string | null;
   notificationPrefs: Record<string, boolean>;
   createdAt: string;
+}
+
+export interface MfaFactorHint {
+  factorId: string;
+  uid: string;
+  displayName: string;
+}
+
+export interface AuthSessionOrMfaResponse {
+  user?: AuthUser;
+  token?: string;
+  mfaRequired?: boolean;
+  challengeToken?: string;
+  factors?: MfaFactorHint[];
+  hintLabel?: string;
 }
 
 export interface MediaMeta {

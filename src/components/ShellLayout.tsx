@@ -9,6 +9,7 @@ import {
   Feather,
   HeartHandshake,
   Home,
+  MapPin,
   Mic,
   Moon,
   Palette,
@@ -30,6 +31,7 @@ import type { ModuleId, SearchResult } from '../types/echo';
 const SIDEBAR_ITEMS: Array<{ id: ModuleId; label: string; icon: React.ComponentType<{ className?: string }> }> = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'memories', label: 'ECHO Memory', icon: BookOpen },
+  { id: 'memory-map', label: 'Memory Map', icon: MapPin },
   { id: 'ai', label: 'AI Life Memory', icon: Sparkles },
   { id: 'capsules', label: 'Time Capsules', icon: Clock },
   { id: 'wisdom', label: "Stranger's Wisdom", icon: Feather },
@@ -121,8 +123,11 @@ export function ShellLayout({ children }: { children: React.ReactNode }) {
 
   const handleManualSync = async () => {
     setSyncing(true);
-    await syncNow();
-    setSyncing(false);
+    try {
+      await syncNow();
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const currentLabel =

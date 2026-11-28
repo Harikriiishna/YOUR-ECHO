@@ -4,6 +4,7 @@ import {
   BookOpen,
   CheckCircle2,
   FileAudio,
+  History,
   Loader2,
   Mic,
   Send,
@@ -15,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useEcho } from '../context/EchoContext';
 import { apiRequest, uploadMediaFile } from '../lib/api';
+import { startBrowserSpeechCapture, type LiveSpeechCaptureSession } from '../lib/browserSpeech';
 import type { AiChatMessage, MemoryItem, ModuleId } from '../types/echo';
 import { AuthMedia } from './MediaElements';
 
@@ -30,6 +32,64 @@ const SUGGESTED_QUESTIONS = [
 ];
 
 type VoicePhase = 'idle' | 'recording' | 'uploading' | 'transcribing' | 'saving';
+
+interface RecentSearchItem {
+  query: string;
+  searchedAt: string;
+  sourceCount: number;
+}
+
+const MAX_RECENT_SEARCHES = 8;
+
+function getRecentSearchesKey(userId?: string | null): string {
+  return `echo.ai.recentSearches.${userId || 'guest'}`;
+}
+
+function loadRecentSearches(storageKey: string): RecentSearchItem[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter(
+        (entry): entry is RecentSearchItem =>
+          Boolean(entry) &&
+          typeof entry === 'object' &&
+          typeof (entry as RecentSearchItem).query === 'string' &&
+          (entry as RecentSearchItem).query.trim().length > 0
+      )
+      .slice(0, MAX_RECENT_SEARCHES)
+      .map((entry) => ({
+        query: entry.query.trim(),
+        searchedAt: typeof entry.searchedAt === 'string' ? entry.searchedAt : new Date().toISOString(),
+        sourceCount: typeof entry.sourceCount === 'number' && Number.isFinite(entry.sourceCount) ? entry.sourceCount : 0,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+function persistRecentSearches(storageKey: string, items: RecentSearchItem[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(items.slice(0, MAX_RECENT_SEARCHES)));
+  } catch {
+    // Ignore storage quota or private-mode restrictions
+  }
+}
+
+function formatRelativeSearchTime(iso: string): string {
+  const ts = Date.parse(iso);
+  if (Number.isNaN(ts)) return '';
+  const diffMins = Math.max(0, Math.floor((Date.now() - ts) / 60_000));
+  if (diffMins < 1) return 'just now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
 
 function pickSupportedAudioMimeType(): string | undefined {
   if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
@@ -56,7 +116,7 @@ function extensionForMime(mimeType: string): string {
 
 function deriveTitleFromTranscript(transcript: string): string {
   const cleaned = transcript.replace(/\s+/g, ' ').trim();
-  if (!cleaned) return `Spoken Memory (${new Date().toISOString().slice(0, 10)})`;
+  if (!cleaned) return `Spoken Memory (${new Date().toLocaleDateString('en-CA')})`;
   const words = cleaned.split(' ').slice(0, 7).join(' ');
   return words.length < cleaned.length ? `${words}...` : words;
 }
@@ -69,6 +129,10 @@ export function AiMemoryModule() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [followUps, setFollowUps] = useState<string[]>([]);
+  const recentSearchesKey = getRecentSearchesKey(user?.id);
+  const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>(() =>
+    loadRecentSearches(getRecentSearchesKey(user?.id))
+  );
 
   // Microphone Spoken Memory Capture State
   const [voicePhase, setVoicePhase] = useState<VoicePhase>('idle');
@@ -76,6 +140,7 @@ export function AiMemoryModule() {
   const [audioLevels, setAudioLevels] = useState<number[]>(() => Array(12).fill(0.18));
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [savedVoiceMemory, setSavedVoiceMemory] = useState<MemoryItem | null>(null);
+  const [liveSpeechPreview, setLiveSpeechPreview] = useState('');
 
   const recorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -84,6 +149,8 @@ export function AiMemoryModule() {
   const rafRef = useRef<number | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const cancelledRef = useRef(false);
+  const speechCaptureRef = useRef<LiveSpeechCaptureSession | null>(null);
+  const liveTranscriptRef = useRef<string>('');
 
   const loadHistory = async () => {
     setLoadingHistory(true);
@@ -100,6 +167,10 @@ export function AiMemoryModule() {
   useEffect(() => {
     void loadHistory();
   }, []);
+
+  useEffect(() => {
+    setRecentSearches(loadRecentSearches(recentSearchesKey));
+  }, [recentSearchesKey]);
 
   useEffect(() => {
     if (focusItemId && focusItemId.length > 4) {
@@ -130,6 +201,8 @@ export function AiMemoryModule() {
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
+      speechCaptureRef.current?.cancel();
+      speechCaptureRef.current = null;
       if (recorderRef.current && recorderRef.current.state !== 'inactive') {
         try {
           recorderRef.current.stop();
@@ -141,7 +214,11 @@ export function AiMemoryModule() {
     };
   }, []);
 
-  const processAudioAndSaveMemory = async (audioBlob: Blob, filename: string) => {
+  const processAudioAndSaveMemory = async (
+    audioBlob: Blob,
+    filename: string,
+    browserTranscript = ''
+  ) => {
     setVoiceError(null);
     setSavedVoiceMemory(null);
 
@@ -150,27 +227,34 @@ export function AiMemoryModule() {
       const uploaded = await uploadMediaFile(audioBlob, filename, 'memory');
 
       setVoicePhase('transcribing');
-      const tr = await apiRequest<{ transcript: string }>('/ai/transcribe', {
-        method: 'POST',
-        body: JSON.stringify({ mediaId: uploaded.id }),
-      });
-
-      const transcript = (tr.transcript || '').trim();
-      if (!transcript) {
-        setVoiceError('No clear speech was detected in that recording. Please try speaking closer to your microphone.');
-        setVoicePhase('idle');
-        return;
+      let serverTranscript = '';
+      try {
+        const tr = await apiRequest<{ transcript: string }>('/ai/transcribe', {
+          method: 'POST',
+          body: JSON.stringify({ mediaId: uploaded.id }),
+        });
+        serverTranscript = (tr.transcript || '').trim();
+      } catch {
+        // Fallback smoothly to browser speech capture or saved audio memory note
       }
 
+      const memoryDate = new Date().toLocaleDateString('en-CA');
+      const rawTranscript = (serverTranscript || browserTranscript).trim();
+      const transcript =
+        rawTranscript ||
+        `Voice memory recorded on ${memoryDate}. Listen to the attached audio recording below.`;
+
       setVoicePhase('saving');
-      let generatedTitle = deriveTitleFromTranscript(transcript);
+      let generatedTitle = rawTranscript
+        ? deriveTitleFromTranscript(rawTranscript)
+        : `Spoken Memory (${memoryDate})`;
       let generatedSummary = '';
 
-      if (user?.aiConsent) {
+      if (user?.aiConsent && rawTranscript) {
         try {
           const assist = await apiRequest<{ title?: string; summary?: string }>('/ai/assist', {
             method: 'POST',
-            body: JSON.stringify({ mode: 'title_and_summary', text: transcript }),
+            body: JSON.stringify({ mode: 'title_and_summary', text: rawTranscript }),
           });
           if (assist.title?.trim()) generatedTitle = assist.title.trim();
           if (assist.summary?.trim()) generatedSummary = assist.summary.trim();
@@ -179,7 +263,6 @@ export function AiMemoryModule() {
         }
       }
 
-      const memoryDate = new Date().toISOString().slice(0, 10);
       const payload = {
         title: generatedTitle,
         content: transcript,
@@ -248,6 +331,10 @@ export function AiMemoryModule() {
       recorder.onstop = () => {
         const finalMime = recorder.mimeType || mimeType || 'audio/webm';
         const blob = new Blob(chunksRef.current, { type: finalMime });
+        const capturedSpeech = speechCaptureRef.current?.stop() || '';
+        speechCaptureRef.current = null;
+        liveTranscriptRef.current = capturedSpeech;
+        setLiveSpeechPreview('');
         cleanupRecordingResources();
 
         if (cancelledRef.current) {
@@ -261,7 +348,11 @@ export function AiMemoryModule() {
         }
 
         const ext = extensionForMime(finalMime);
-        void processAudioAndSaveMemory(blob, `spoken-memory-${Date.now()}.${ext}`);
+        void processAudioAndSaveMemory(
+          blob,
+          `spoken-memory-${Date.now()}.${ext}`,
+          capturedSpeech
+        );
       };
 
       // Live audio level meter
@@ -293,11 +384,18 @@ export function AiMemoryModule() {
       }
 
       recorderRef.current = recorder;
+      liveTranscriptRef.current = '';
+      setLiveSpeechPreview('');
       recorder.start(250);
+      speechCaptureRef.current = startBrowserSpeechCapture({
+        onInterim: (transcript) => setLiveSpeechPreview(transcript),
+      });
       setRecordSeconds(0);
       setVoicePhase('recording');
       timerRef.current = window.setInterval(() => setRecordSeconds((s) => s + 1), 1000);
     } catch {
+      speechCaptureRef.current?.cancel();
+      speechCaptureRef.current = null;
       cleanupRecordingResources();
       setVoiceError('Microphone access was denied or unavailable. You can upload an audio file instead.');
       setVoicePhase('idle');
@@ -316,6 +414,10 @@ export function AiMemoryModule() {
 
   const cancelVoiceRecording = () => {
     cancelledRef.current = true;
+    speechCaptureRef.current?.cancel();
+    speechCaptureRef.current = null;
+    liveTranscriptRef.current = '';
+    setLiveSpeechPreview('');
     if (recorderRef.current && recorderRef.current.state !== 'inactive') {
       recorderRef.current.stop();
     } else {
@@ -372,12 +474,42 @@ export function AiMemoryModule() {
         },
       ]);
       setFollowUps(res.followUpQuestions || []);
+      const nextEntry: RecentSearchItem = {
+        query: clean,
+        searchedAt: res.createdAt || new Date().toISOString(),
+        sourceCount: (res.sources || []).length,
+      };
+      setRecentSearches((prev) => {
+        const filtered = prev.filter((item) => item.query.toLowerCase() !== clean.toLowerCase());
+        const updated = [nextEntry, ...filtered].slice(0, MAX_RECENT_SEARCHES);
+        persistRecentSearches(recentSearchesKey, updated);
+        return updated;
+      });
     } catch (err) {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticUser.id));
       setInput((prev) => prev || clean);
       setError(err instanceof Error ? err.message : 'ECHO AI query failed.');
     } finally {
       setSending(false);
+    }
+  };
+
+  const removeRecentSearch = (queryToRemove: string) => {
+    setRecentSearches((prev) => {
+      const updated = prev.filter((item) => item.query.toLowerCase() !== queryToRemove.toLowerCase());
+      persistRecentSearches(recentSearchesKey, updated);
+      return updated;
+    });
+  };
+
+  const clearRecentSearches = () => {
+    setRecentSearches([]);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.removeItem(recentSearchesKey);
+      } catch {
+        // Ignore storage errors
+      }
     }
   };
 
@@ -491,7 +623,7 @@ export function AiMemoryModule() {
                 <span className="text-sm font-semibold text-ink">
                   {voicePhase === 'recording' && 'Recording spoken memory...'}
                   {voicePhase === 'uploading' && 'Uploading voice recording...'}
-                  {voicePhase === 'transcribing' && 'Transcribing speech with ECHO AI...'}
+                  {voicePhase === 'transcribing' && 'Processing voice capture...'}
                   {voicePhase === 'saving' && 'Generating title & saving to ECHO Memory...'}
                 </span>
                 {voicePhase === 'recording' && (
@@ -503,8 +635,13 @@ export function AiMemoryModule() {
               <p className="text-xs text-ink-muted">
                 {voicePhase === 'recording'
                   ? 'Speak naturally about your moment, people, or feelings. Stop when done to transcribe and save automatically.'
-                  : 'Please keep this tab open while your spoken memory is transcribed and archived.'}
+                  : 'Please keep this tab open while your spoken memory is processed and archived.'}
               </p>
+              {voicePhase === 'recording' && liveSpeechPreview && (
+                <p className="text-xs text-cyan-700 dark:text-cyan-200 bg-cyan-500/10 border border-cyan-500/20 rounded-lg px-2.5 py-1.5 italic line-clamp-2">
+                  “{liveSpeechPreview}”
+                </p>
+              )}
             </div>
           </div>
 
@@ -648,6 +785,75 @@ export function AiMemoryModule() {
           </button>
         ))}
       </div>
+
+      {/* Recent Searches (saved locally in browser storage) */}
+      <section aria-label="Recent searches" className="space-y-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs font-medium text-ink-secondary">
+            <History className="w-3.5 h-3.5 text-cyan-600 dark:text-cyan-300 shrink-0" />
+            <span>Recent Searches</span>
+            {recentSearches.length > 0 && (
+              <>
+                <span aria-hidden="true" className="text-ink-muted">·</span>
+                <span className="font-mono tabular-nums text-ink-muted">{recentSearches.length}</span>
+              </>
+            )}
+          </div>
+          {recentSearches.length > 0 && (
+            <button
+              type="button"
+              onClick={clearRecentSearches}
+              className="text-xs text-ink-muted hover:text-rose-600 dark:hover:text-rose-300 transition-colors whitespace-nowrap shrink-0"
+            >
+              Clear recent
+            </button>
+          )}
+        </div>
+
+        {recentSearches.length === 0 ? (
+          <p className="text-xs text-ink-muted">
+            Your past reflection queries are saved locally in this browser for quick one-click recall.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {recentSearches.map((item) => {
+              const relTime = formatRelativeSearchTime(item.searchedAt);
+              return (
+                <div
+                  key={item.query}
+                  className="inline-flex items-center max-w-full rounded-lg border border-hairline-strong bg-surface hover:bg-surface-raised transition-colors"
+                >
+                  <button
+                    type="button"
+                    onClick={() => void askQuestion(item.query)}
+                    disabled={sending || !user?.aiConsent}
+                    title={`Run recent query: ${item.query}`}
+                    className="touch-manipulation min-w-0 min-h-[40px] sm:min-h-[34px] flex items-center gap-2 pl-3 pr-2 py-1.5 text-left text-xs text-ink hover:text-cyan-700 dark:hover:text-cyan-200 disabled:opacity-40 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 rounded-l-lg"
+                  >
+                    <span className="truncate max-w-[200px] sm:max-w-[280px] font-medium">
+                      {item.query}
+                    </span>
+                    <span className="text-[11px] font-mono tabular-nums text-ink-muted whitespace-nowrap shrink-0">
+                      {item.sourceCount > 0 ? `${item.sourceCount} src` : ''}
+                      {item.sourceCount > 0 && relTime ? ' · ' : ''}
+                      {relTime}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeRecentSearch(item.query)}
+                    aria-label={`Remove "${item.query}" from recent searches`}
+                    title="Remove from recent searches"
+                    className="touch-manipulation min-h-[40px] sm:min-h-[34px] inline-flex items-center justify-center px-2.5 text-ink-muted hover:text-rose-600 dark:hover:text-rose-300 transition-colors shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 rounded-r-lg"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
 
       {/* Conversation Transcript */}
       <div className="rounded-2xl border border-hairline bg-surface p-5 sm:p-6 space-y-5 min-h-[380px] flex flex-col justify-between">

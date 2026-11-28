@@ -140,7 +140,7 @@ export function MonthlyReflectionCard({
               AI summaries are currently paused
             </h3>
             <p className="text-xs text-ink-muted leading-relaxed">
-              Enable AI archive reflection in your Profile settings if you’d like Gemini AI to distill monthly themes from your daily check-ins.
+              Enable AI archive reflection in your Profile settings if you’d like ECHO AI to distill monthly themes from your daily check-ins.
             </p>
           </div>
           <button
@@ -159,7 +159,7 @@ export function MonthlyReflectionCard({
               No check-ins to summarize yet
             </h3>
             <p className="text-xs text-ink-muted leading-relaxed">
-              Once you record daily check-in reflections from the last 30 days, Gemini AI can surface recurring themes, emotional shifts, and a gentle question for the month ahead.
+              Once you record daily check-in reflections from the last 30 days, ECHO AI can surface recurring themes, emotional shifts, and a gentle question for the month ahead.
             </p>
           </div>
           <a

@@ -26,6 +26,9 @@ export function initDatabase(): void {
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       display_name TEXT NOT NULL,
+      phone_number TEXT,
+      firebase_uid TEXT,
+      auth_provider TEXT NOT NULL DEFAULT 'email',
       bio TEXT NOT NULL DEFAULT '',
       avatar_media_id TEXT,
       location_hint TEXT NOT NULL DEFAULT '',
@@ -52,6 +55,32 @@ export function initDatabase(): void {
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       expires_at TEXT NOT NULL,
       used INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS phone_otps (
+      phone_number TEXT PRIMARY KEY,
+      otp_hash TEXT NOT NULL,
+      salt TEXT NOT NULL,
+      attempts INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT NOT NULL,
+      last_sent_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS totp_pending_setups (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      secret TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS mfa_challenges (
+      token_hash TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      device_label TEXT NOT NULL DEFAULT 'Web Browser',
+      attempts INTEGER NOT NULL DEFAULT 0,
+      expires_at TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
 
@@ -344,6 +373,32 @@ export function initDatabase(): void {
   if (!userCols.some((c) => c.name === 'theme')) {
     db.exec("ALTER TABLE users ADD COLUMN theme TEXT NOT NULL DEFAULT 'social'");
   }
+  if (!userCols.some((c) => c.name === 'phone_number')) {
+    db.exec('ALTER TABLE users ADD COLUMN phone_number TEXT');
+  }
+  if (!userCols.some((c) => c.name === 'firebase_uid')) {
+    db.exec('ALTER TABLE users ADD COLUMN firebase_uid TEXT');
+  }
+  if (!userCols.some((c) => c.name === 'auth_provider')) {
+    db.exec("ALTER TABLE users ADD COLUMN auth_provider TEXT NOT NULL DEFAULT 'email'");
+  }
+  if (!userCols.some((c) => c.name === 'totp_secret')) {
+    db.exec('ALTER TABLE users ADD COLUMN totp_secret TEXT');
+  }
+  if (!userCols.some((c) => c.name === 'totp_enabled')) {
+    db.exec('ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!userCols.some((c) => c.name === 'totp_display_name')) {
+    db.exec("ALTER TABLE users ADD COLUMN totp_display_name TEXT NOT NULL DEFAULT ''");
+  }
+  if (!userCols.some((c) => c.name === 'totp_enrolled_at')) {
+    db.exec('ALTER TABLE users ADD COLUMN totp_enrolled_at TEXT');
+  }
+  if (!userCols.some((c) => c.name === 'totp_last_step')) {
+    db.exec('ALTER TABLE users ADD COLUMN totp_last_step INTEGER');
+  }
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone_unique ON users(phone_number) WHERE phone_number IS NOT NULL');
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_firebase_uid_unique ON users(firebase_uid) WHERE firebase_uid IS NOT NULL');
   const userVersionRow = db.prepare('PRAGMA user_version').get() as { user_version: number } | undefined;
   if ((userVersionRow?.user_version ?? 0) < 1) {
     db.exec("UPDATE users SET theme = 'social' WHERE theme = 'midnight'");

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Calendar as CalendarIcon,
   Check,
@@ -11,12 +11,14 @@ import {
   Link2,
   Loader2,
   MapPin,
+  Mic,
   Navigation,
   Play,
   Plus,
   Search,
   Shuffle,
   Sparkles,
+  Square,
   Tag,
   Tags,
   Trash2,
@@ -24,7 +26,12 @@ import {
   X,
 } from 'lucide-react';
 import { useEcho } from '../context/EchoContext';
-import { apiRequest, readOfflineCache, saveOfflineCache } from '../lib/api';
+import { apiRequest, readOfflineCache, saveOfflineCache, uploadMediaFile } from '../lib/api';
+import {
+  isBrowserSpeechSupported,
+  startBrowserSpeechCapture,
+  type LiveSpeechCaptureSession,
+} from '../lib/browserSpeech';
 import type { MediaMeta, MemoryCollection, MemoryItem } from '../types/echo';
 import { AuthMedia, MediaPicker, VoiceRecorder } from './MediaElements';
 import { MemoriesMapView } from './MemoriesMapView';
@@ -105,6 +112,48 @@ function getImpactStyle(impact: string) {
   );
 }
 
+const CARD_ENTRY_DELAY_CLASSES = [
+  '',
+  '[animation-delay:30ms]',
+  '[animation-delay:60ms]',
+  '[animation-delay:90ms]',
+  '[animation-delay:120ms]',
+  '[animation-delay:150ms]',
+  '[animation-delay:180ms]',
+  '[animation-delay:210ms]',
+  '[animation-delay:240ms]',
+] as const;
+
+function pickSupportedAudioMimeType(): string | undefined {
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') {
+    return undefined;
+  }
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/mp4',
+    'audio/ogg;codecs=opus',
+    'audio/ogg',
+  ];
+  return candidates.find((type) => MediaRecorder.isTypeSupported(type));
+}
+
+function extensionForMime(mimeType: string): string {
+  const lower = mimeType.toLowerCase();
+  if (lower.includes('mp4') || lower.includes('m4a')) return 'mp4';
+  if (lower.includes('ogg')) return 'ogg';
+  if (lower.includes('wav')) return 'wav';
+  if (lower.includes('mpeg') || lower.includes('mp3')) return 'mp3';
+  return 'webm';
+}
+
+function deriveTitleFromTranscript(transcript: string): string {
+  const cleaned = transcript.replace(/\s+/g, ' ').trim();
+  if (!cleaned) return `Voice Memory (${new Date().toLocaleDateString('en-CA')})`;
+  const words = cleaned.split(' ').slice(0, 7).join(' ');
+  return words.length < cleaned.length ? `${words}...` : words;
+}
+
 export function MemoriesModule() {
   const { user, focusItemId, isOnline, queueMutation, quickCaptureTarget, setQuickCaptureTarget } = useEcho();
   const [memories, setMemories] = useState<MemoryItem[]>([]);
@@ -122,7 +171,7 @@ export function MemoriesModule() {
   const [selectedPerson, setSelectedPerson] = useState<string | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagFilterMode, setTagFilterMode] = useState<'any' | 'all'>('any');
-  const [calendarMonth, setCalendarMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date().toLocaleDateString('en-CA').slice(0, 7));
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedYear, setSelectedYear] = useState<string | null>(null);
   const [selectedDateJump, setSelectedDateJump] = useState<string | null>(null);
@@ -151,7 +200,7 @@ export function MemoriesModule() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [memoryDate, setMemoryDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [memoryDate, setMemoryDate] = useState(() => new Date().toLocaleDateString('en-CA'));
   const [locationName, setLocationName] = useState('');
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
@@ -174,6 +223,20 @@ export function MemoriesModule() {
   const [locatingGps, setLocatingGps] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Voice-to-Memory (SpeechRecognition) Auto-Save State
+  const [voiceAutoPhase, setVoiceAutoPhase] = useState<'idle' | 'recording' | 'saving'>('idle');
+  const [voiceAutoSeconds, setVoiceAutoSeconds] = useState(0);
+  const [voiceLiveTranscript, setVoiceLiveTranscript] = useState('');
+  const [voiceAutoError, setVoiceAutoError] = useState<string | null>(null);
+  const voiceSpeechRef = useRef<LiveSpeechCaptureSession | null>(null);
+  const voiceTranscriptRef = useRef('');
+  const voiceRecorderRef = useRef<MediaRecorder | null>(null);
+  const voiceStreamRef = useRef<MediaStream | null>(null);
+  const voiceChunksRef = useRef<Blob[]>([]);
+  const voiceTimerRef = useRef<number | null>(null);
+  const voiceRecorderStopResolveRef = useRef<((result: { blob: Blob | null; mimeType: string }) => void) | null>(null);
+  const voiceSessionCancelledRef = useRef(false);
 
   const [newCollectionName, setNewCollectionName] = useState('');
   const [newCollectionDesc, setNewCollectionDesc] = useState('');
@@ -205,9 +268,13 @@ export function MemoriesModule() {
       setAllTagsDirectory(tagsRes.tags);
       setSentimentSummary(sentimentRes);
       void saveOfflineCache('memories', memRes.memories);
-    } catch {
+    } catch (err) {
       const cached = await readOfflineCache<MemoryItem[]>('memories');
-      if (cached) setMemories(cached);
+      if (cached) {
+        setMemories(cached);
+      } else {
+        setSentimentNotice(err instanceof Error ? err.message : 'Unable to load memories.');
+      }
     } finally {
       setLoading(false);
     }
@@ -218,18 +285,71 @@ export function MemoriesModule() {
   }, [categoryFilter, moodFilter, impactFilter, favoritesOnly, selectedCollectionId, selectedPerson, selectedTags, tagFilterMode]);
 
   useEffect(() => {
-    if (focusItemId && memories.length > 0) {
+    if (!focusItemId) return;
+    setView('timeline');
+    if (memories.length > 0) {
       const found = memories.find((m) => m.id === focusItemId);
-      if (found) setActiveMemory(found);
+      if (found) {
+        if (selectedYear && !found.memoryDate.startsWith(selectedYear)) {
+          setSelectedYear(null);
+        }
+        setActiveMemory(found);
+        setPendingScrollMemoryId(found.id);
+      }
     }
   }, [focusItemId, memories]);
 
   useEffect(() => {
-    if (quickCaptureTarget === 'memory' || quickCaptureTarget === 'voice') {
+    if (quickCaptureTarget === 'memory') {
       openNewEditor();
+      setQuickCaptureTarget(null);
+    } else if (quickCaptureTarget === 'voice') {
+      openNewEditor({ autoStartVoice: true });
       setQuickCaptureTarget(null);
     }
   }, [quickCaptureTarget]);
+
+  const cleanupVoiceAutoResources = () => {
+    if (voiceTimerRef.current) {
+      window.clearInterval(voiceTimerRef.current);
+      voiceTimerRef.current = null;
+    }
+    if (voiceStreamRef.current) {
+      voiceStreamRef.current.getTracks().forEach((t) => t.stop());
+      voiceStreamRef.current = null;
+    }
+  };
+
+  const cancelVoiceAutoCapture = () => {
+    voiceSessionCancelledRef.current = true;
+    voiceSpeechRef.current?.cancel();
+    voiceSpeechRef.current = null;
+    voiceTranscriptRef.current = '';
+    if (voiceRecorderRef.current && voiceRecorderRef.current.state !== 'inactive') {
+      try {
+        voiceRecorderRef.current.stop();
+      } catch {
+        // Ignore stop errors on cancel
+      }
+    }
+    voiceRecorderRef.current = null;
+    voiceChunksRef.current = [];
+    if (voiceRecorderStopResolveRef.current) {
+      const resolve = voiceRecorderStopResolveRef.current;
+      voiceRecorderStopResolveRef.current = null;
+      resolve({ blob: null, mimeType: 'audio/webm' });
+    }
+    cleanupVoiceAutoResources();
+    setVoiceLiveTranscript('');
+    setVoiceAutoSeconds(0);
+    setVoiceAutoPhase('idle');
+  };
+
+  useEffect(() => {
+    return () => {
+      cancelVoiceAutoCapture();
+    };
+  }, []);
 
   const displayedMemories = useMemo(() => {
     if (!selectedYear) return memories;
@@ -302,11 +422,283 @@ export function MemoriesModule() {
       .catch(() => setRelatedMemories([]));
   }, [activeMemory?.id]);
 
-  const openNewEditor = () => {
+  const startVoiceAutoCapture = async () => {
+    if (voiceSpeechRef.current || voiceAutoPhase === 'saving') return;
+    setVoiceAutoError(null);
+    setError(null);
+
+    if (!isBrowserSpeechSupported()) {
+      setVoiceAutoError('SpeechRecognition is unavailable in this browser. Type your memory or use Upload Audio below.');
+      return;
+    }
+
+    voiceSessionCancelledRef.current = false;
+    voiceTranscriptRef.current = '';
+    setVoiceLiveTranscript('');
+    setVoiceAutoSeconds(0);
+    voiceChunksRef.current = [];
+
+    // Start live SpeechRecognition immediately inside the user interaction flow
+    const speechSession = startBrowserSpeechCapture({
+      onInterim: (transcript) => {
+        voiceTranscriptRef.current = transcript;
+        setVoiceLiveTranscript(transcript);
+      },
+      onError: (code, msg) => {
+        if (code === 'not-allowed' || code === 'service-not-allowed' || code === 'audio-capture' || code === 'start-failed') {
+          setVoiceAutoError(msg);
+          cancelVoiceAutoCapture();
+        } else if (code !== 'no-speech') {
+          setVoiceAutoError(msg);
+        }
+      },
+    });
+    if (voiceSessionCancelledRef.current) {
+      return;
+    }
+    voiceSpeechRef.current = speechSession;
+    setVoiceAutoPhase('recording');
+    voiceTimerRef.current = window.setInterval(() => setVoiceAutoSeconds((s) => s + 1), 1000);
+
+    // Optionally capture an accompanying audio clip via MediaRecorder when supported
+    if (navigator.mediaDevices?.getUserMedia && typeof MediaRecorder !== 'undefined') {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        if (voiceSessionCancelledRef.current) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        voiceStreamRef.current = stream;
+        const mimeType = pickSupportedAudioMimeType();
+        const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+        recorder.ondataavailable = (ev) => {
+          if (ev.data.size > 0) voiceChunksRef.current.push(ev.data);
+        };
+        recorder.onstop = () => {
+          const finalMime = recorder.mimeType || mimeType || 'audio/webm';
+          const blob =
+            voiceChunksRef.current.length > 0
+              ? new Blob(voiceChunksRef.current, { type: finalMime })
+              : null;
+          voiceChunksRef.current = [];
+          voiceRecorderRef.current = null;
+          const resolve = voiceRecorderStopResolveRef.current;
+          voiceRecorderStopResolveRef.current = null;
+          if (resolve) {
+            resolve({ blob: blob && blob.size > 0 ? blob : null, mimeType: finalMime });
+          }
+        };
+        voiceRecorderRef.current = recorder;
+        recorder.start(250);
+      } catch {
+        // SpeechRecognition can still capture live transcript if MediaRecorder mic stream is unavailable
+      }
+    }
+  };
+
+  const stopAndSaveVoiceAutoCapture = async () => {
+    if (voiceAutoPhase !== 'recording') return;
+    setVoiceAutoError(null);
+    setError(null);
+
+    if (category === 'Custom' && !customCategory.trim()) {
+      setError('Please enter a custom category name before saving.');
+      return;
+    }
+
+    let parsedLat: number | null = null;
+    if (latitude.trim()) {
+      const n = Number(latitude.trim());
+      if (!Number.isFinite(n) || n < -90 || n > 90) {
+        setError('Latitude must be a valid number between -90 and 90.');
+        return;
+      }
+      parsedLat = n;
+    }
+
+    let parsedLng: number | null = null;
+    if (longitude.trim()) {
+      const n = Number(longitude.trim());
+      if (!Number.isFinite(n) || n < -180 || n > 180) {
+        setError('Longitude must be a valid number between -180 and 180.');
+        return;
+      }
+      parsedLng = n;
+    }
+
+    // Snapshot form fields before asynchronous stop & save completes
+    const draftTitle = title.trim();
+    const draftContent = content.trim();
+    const draftDate = memoryDate || new Date().toLocaleDateString('en-CA');
+    const draftLocation = locationName.trim();
+    const draftMood = mood;
+    const draftCategory = category === 'Custom' ? customCategory.trim() : category;
+    const draftCollectionId = collectionId || null;
+    const draftAiExcluded = aiExcluded;
+    const draftPeople = peopleInput.split(',').map((p) => p.trim()).filter(Boolean);
+    const pendingDraftTag = editorTagDraft.trim().replace(/^#+/, '').slice(0, 40);
+    const baseTags =
+      pendingDraftTag && !editorTags.some((t) => t.toLowerCase() === pendingDraftTag.toLowerCase())
+        ? [...editorTags, pendingDraftTag]
+        : [...editorTags];
+    if (!baseTags.some((t) => t.toLowerCase() === 'voice-memory')) {
+      baseTags.push('voice-memory');
+    }
+    const baseMediaIds = attachedMedia.map((m) => m.id);
+
+    setVoiceAutoPhase('saving');
+
+    // Stop SpeechRecognition and wait briefly for any buffered final phrase
+    const speechSession = voiceSpeechRef.current;
+    voiceSpeechRef.current = null;
+    const waitedTranscript = speechSession ? await speechSession.stopAndWait(300) : '';
+    const finalTranscript = (waitedTranscript || voiceTranscriptRef.current).trim();
+
+    // Stop optional MediaRecorder audio capture
+    let audioResult: { blob: Blob | null; mimeType: string } = { blob: null, mimeType: 'audio/webm' };
+    if (voiceRecorderRef.current && voiceRecorderRef.current.state !== 'inactive') {
+      audioResult = await new Promise<{ blob: Blob | null; mimeType: string }>((resolve) => {
+        let settled = false;
+        const timer = window.setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          voiceRecorderStopResolveRef.current = null;
+          resolve({ blob: null, mimeType: 'audio/webm' });
+        }, 1200);
+        voiceRecorderStopResolveRef.current = (res) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
+          resolve(res);
+        };
+        try {
+          voiceRecorderRef.current?.stop();
+        } catch {
+          window.clearTimeout(timer);
+          voiceRecorderStopResolveRef.current = null;
+          resolve({ blob: null, mimeType: 'audio/webm' });
+        }
+      });
+    }
+
+    cleanupVoiceAutoResources();
+
+    if (voiceSessionCancelledRef.current) {
+      setVoiceAutoPhase('idle');
+      return;
+    }
+
+    if (!finalTranscript) {
+      setVoiceAutoPhase('idle');
+      setVoiceAutoError('No speech transcript was detected. Try speaking clearly and click Record & Auto-Save again.');
+      return;
+    }
+
+    try {
+      const nextMediaIds = [...baseMediaIds];
+      if (audioResult.blob && isOnline) {
+        try {
+          const ext = extensionForMime(audioResult.mimeType);
+          const uploaded = await uploadMediaFile(
+            audioResult.blob,
+            `voice-memory-${Date.now()}.${ext}`,
+            'memory'
+          );
+          nextMediaIds.push(uploaded.id);
+        } catch {
+          // Audio upload failure is non-fatal; SpeechRecognition transcript still saves cleanly
+        }
+      }
+
+      let resolvedTitle = draftTitle || deriveTitleFromTranscript(finalTranscript);
+      let resolvedSummary = aiSummary;
+
+      if (!draftTitle && user?.aiConsent && isOnline && !draftAiExcluded) {
+        try {
+          const assist = await apiRequest<{ title?: string; summary?: string }>('/ai/assist', {
+            method: 'POST',
+            body: JSON.stringify({ mode: 'title_and_summary', text: finalTranscript }),
+          });
+          if (assist.title?.trim()) resolvedTitle = assist.title.trim();
+          if (assist.summary?.trim() && !resolvedSummary) resolvedSummary = assist.summary.trim();
+        } catch {
+          // Keep locally derived title if AI assist is unavailable
+        }
+      }
+
+      const combinedContent = draftContent ? `${draftContent}\n\n${finalTranscript}` : finalTranscript;
+
+      const payload = {
+        title: resolvedTitle,
+        content: combinedContent,
+        memoryDate: draftDate,
+        locationName: draftLocation,
+        latitude: parsedLat,
+        longitude: parsedLng,
+        mood: draftMood,
+        category: draftCategory,
+        aiExcluded: draftAiExcluded,
+        aiSummary: resolvedSummary,
+        sentimentTone,
+        emotionalImpact,
+        sentimentScore,
+        sentimentRationale,
+        autoAnalyzeSentiment: !draftAiExcluded && !emotionalImpact && Boolean(user?.aiConsent),
+        collectionId: draftCollectionId,
+        tags: baseTags,
+        people: draftPeople,
+        mediaIds: nextMediaIds,
+      };
+
+      if (!isOnline) {
+        await queueMutation({
+          endpoint: '/memories',
+          payload,
+          label: `Voice Memory: ${payload.title}`,
+        });
+        setEditorOpen(false);
+        setVoiceLiveTranscript('');
+        setVoiceAutoSeconds(0);
+        setSentimentNotice('Offline mode — your transcribed voice memory was queued to sync automatically.');
+        return;
+      }
+
+      const saved = await apiRequest<{ memory: MemoryItem }>('/memories', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      setEditorOpen(false);
+      setVoiceLiveTranscript('');
+      setVoiceAutoSeconds(0);
+      if (selectedYear && !saved.memory.memoryDate.startsWith(selectedYear)) {
+        setSelectedYear(null);
+      }
+      setView('timeline');
+      setActiveMemory(saved.memory);
+      setPendingScrollMemoryId(saved.memory.id);
+      setSentimentNotice(`Voice memory "${saved.memory.title}" transcribed and saved.`);
+      await loadMemories();
+    } catch (err) {
+      setVoiceAutoError(err instanceof Error ? err.message : 'Unable to save voice memory.');
+    } finally {
+      setVoiceAutoPhase('idle');
+    }
+  };
+
+  const closeEditor = () => {
+    cancelVoiceAutoCapture();
+    setVoiceAutoError(null);
+    setEditorOpen(false);
+  };
+
+  const openNewEditor = (options?: { autoStartVoice?: boolean }) => {
+    cancelVoiceAutoCapture();
+    setVoiceAutoError(null);
     setEditingId(null);
     setTitle('');
     setContent('');
-    setMemoryDate(new Date().toISOString().slice(0, 10));
+    setMemoryDate(new Date().toLocaleDateString('en-CA'));
     setLocationName('');
     setLatitude('');
     setLongitude('');
@@ -326,6 +718,9 @@ export function MemoriesModule() {
     setAttachedMedia([]);
     setError(null);
     setEditorOpen(true);
+    if (options?.autoStartVoice) {
+      void startVoiceAutoCapture();
+    }
   };
 
   const openEditEditor = (m: MemoryItem) => {
@@ -473,6 +868,7 @@ export function MemoriesModule() {
 
   const handleSaveMemory = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (voiceAutoPhase !== 'idle') return;
     setError(null);
 
     if (category === 'Custom' && !customCategory.trim()) {
@@ -798,13 +1194,16 @@ export function MemoriesModule() {
   }, [allTagsDirectory, tagSearch]);
 
   const calendarDays = useMemo(() => {
-    const [yr, mo] = calendarMonth.split('-').map(Number);
+    const safeMonth = /^\d{4}-\d{2}$/.test(calendarMonth)
+      ? calendarMonth
+      : new Date().toLocaleDateString('en-CA').slice(0, 7);
+    const [yr, mo] = safeMonth.split('-').map(Number);
     const firstDay = new Date(yr, mo - 1, 1).getDay();
     const totalDays = new Date(yr, mo, 0).getDate();
     const cells: Array<{ day: number | null; iso: string | null; items: MemoryItem[] }> = [];
     for (let i = 0; i < firstDay; i++) cells.push({ day: null, iso: null, items: [] });
     for (let d = 1; d <= totalDays; d++) {
-      const iso = `${calendarMonth}-${String(d).padStart(2, '0')}`;
+      const iso = `${safeMonth}-${String(d).padStart(2, '0')}`;
       cells.push({
         day: d,
         iso,
@@ -855,7 +1254,15 @@ export function MemoriesModule() {
           </button>
           <button
             type="button"
-            onClick={openNewEditor}
+            onClick={() => openNewEditor({ autoStartVoice: true })}
+            className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-4 py-2 text-xs font-semibold text-cyan-800 dark:text-cyan-200 hover:bg-cyan-500/20 transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
+          >
+            <Mic className="w-4 h-4" />
+            Voice Memory
+          </button>
+          <button
+            type="button"
+            onClick={() => openNewEditor()}
             className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2 text-xs font-semibold text-accent-ink hover:bg-accent-strong transition-colors whitespace-nowrap shrink-0 min-h-[40px]"
           >
             <Plus className="w-4 h-4" />
@@ -1191,17 +1598,26 @@ export function MemoriesModule() {
                 <p className="text-sm text-ink-muted max-w-md mx-auto">
                   Record a story, attach photos or voice notes, and organize them by people, places, and mood.
                 </p>
-                <button
-                  type="button"
-                  onClick={openNewEditor}
-                  className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs font-semibold text-accent-ink hover:bg-accent-strong transition-colors"
-                >
-                  <Plus className="w-4 h-4" /> Capture First Memory
-                </button>
+                <div className="flex flex-wrap items-center justify-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => openNewEditor({ autoStartVoice: true })}
+                    className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/35 bg-cyan-500/10 px-4 py-2.5 text-xs font-semibold text-cyan-800 dark:text-cyan-200 hover:bg-cyan-500/20 transition-colors"
+                  >
+                    <Mic className="w-4 h-4" /> Record Voice Memory
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openNewEditor()}
+                    className="inline-flex items-center gap-2 rounded-xl bg-accent px-4 py-2.5 text-xs font-semibold text-accent-ink hover:bg-accent-strong transition-colors"
+                  >
+                    <Plus className="w-4 h-4" /> Capture First Memory
+                  </button>
+                </div>
               </div>
             ) : (
               <div className={activeMemory ? 'space-y-4' : 'grid grid-cols-1 md:grid-cols-2 gap-4'}>
-                {displayedMemories.map((m) => (
+                {displayedMemories.map((m, index) => (
                   <article
                     key={m.id}
                     id={`memory-card-${m.id}`}
@@ -1209,7 +1625,7 @@ export function MemoriesModule() {
                       setActiveMemory(m);
                       setSelectedDateJump(m.memoryDate);
                     }}
-                    className={`touch-manipulation cursor-pointer rounded-2xl border p-5 transition-colors space-y-3 ${
+                    className={`echo-memory-card-enter ${CARD_ENTRY_DELAY_CLASSES[Math.min(index, CARD_ENTRY_DELAY_CLASSES.length - 1)]} touch-manipulation cursor-pointer rounded-2xl border p-5 transition-[border-color,background-color,transform] duration-200 hover:-translate-y-0.5 space-y-3 ${
                       activeMemory?.id === m.id || (selectedDateJump && m.memoryDate === selectedDateJump)
                         ? 'border-sky-400/50 bg-surface-raised'
                         : 'border-hairline bg-surface hover:border-hairline-strong'
@@ -1518,6 +1934,9 @@ export function MemoriesModule() {
                       const clean = detailTagDraft.trim().replace(/^#+/, '').slice(0, 40);
                       if (!clean) return;
                       setDetailTagDraft('');
+                      if (activeMemory.tags.some((t) => t.toLowerCase() === clean.toLowerCase())) {
+                        return;
+                      }
                       void handleUpdateMemoryTags(activeMemory.id, [...activeMemory.tags, clean]);
                     }}
                     className="flex items-center gap-2 pt-1"
@@ -1636,14 +2055,14 @@ export function MemoriesModule() {
               ) : (
                 memories
                   .filter((m) => m.memoryDate === selectedDay)
-                  .map((m) => (
+                  .map((m, index) => (
                     <div
                       key={m.id}
                       onClick={() => {
                         setActiveMemory(m);
                         setView('timeline');
                       }}
-                      className="touch-manipulation cursor-pointer rounded-xl border border-hairline bg-inset p-3 hover:border-sky-400/50"
+                      className={`echo-memory-card-enter ${CARD_ENTRY_DELAY_CLASSES[Math.min(index, CARD_ENTRY_DELAY_CLASSES.length - 1)]} touch-manipulation cursor-pointer rounded-xl border border-hairline bg-inset p-3 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-sky-400/50`}
                     >
                       <div className="text-sm font-semibold text-ink">{m.title}</div>
                       <div className="text-xs text-ink-muted line-clamp-2 mt-0.5">{m.content}</div>
@@ -1720,15 +2139,16 @@ export function MemoriesModule() {
         </div>
       )}
 
-      {/* VIEW: MAP (LEAFLET) */}
+      {/* VIEW: MAP (CONSTELLATION + WORLD ATLAS) */}
       {view === 'map' && (
         <MemoriesMapView
           memories={displayedMemories}
+          allMemories={memories}
           onOpenMemory={(m) => {
             setActiveMemory(m);
             setView('timeline');
           }}
-          onCreateMemory={openNewEditor}
+          onCreateMemory={() => openNewEditor()}
           onMemoryUpdated={(updated) => {
             setMemories((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
             if (activeMemory?.id === updated.id) {
@@ -2166,7 +2586,7 @@ export function MemoriesModule() {
               <div className="max-w-md mx-auto">
                 <AuthMedia
                   mediaId={memories[slideshowIndex].media[0].id}
-                  mimeTypeHint={memories[slideshowIndex].media[0].mime_type}
+                  mimeTypeHint={memories[slideshowIndex].media[0].mime_type || memories[slideshowIndex].media[0].mimeType}
                   className="max-h-64"
                 />
               </div>
@@ -2204,12 +2624,97 @@ export function MemoriesModule() {
               </h2>
               <button
                 type="button"
-                onClick={() => setEditorOpen(false)}
+                onClick={closeEditor}
+                aria-label="Close memory editor"
                 className="p-1.5 text-ink-muted hover:text-ink"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {!editingId && (
+              <div className="rounded-xl border border-cyan-500/30 bg-cyan-500/10 p-3.5 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                  <div className="space-y-0.5 min-w-0">
+                    <div className="inline-flex items-center gap-2 text-xs font-semibold text-ink">
+                      <Mic className="w-3.5 h-3.5 text-cyan-700 dark:text-cyan-300 shrink-0" />
+                      <span>Voice-to-Memory (SpeechRecognition)</span>
+                      {voiceAutoPhase === 'recording' && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold text-rose-700 dark:text-rose-200 tabular-nums">
+                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                          {String(Math.floor(voiceAutoSeconds / 60)).padStart(2, '0')}:
+                          {String(voiceAutoSeconds % 60).padStart(2, '0')}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-ink-muted">
+                      Record your voice to transcribe live and automatically save as a new memory entry.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {voiceAutoPhase === 'idle' && (
+                      <button
+                        type="button"
+                        onClick={() => void startVoiceAutoCapture()}
+                        disabled={saving || !isBrowserSpeechSupported()}
+                        className="touch-manipulation inline-flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-2 text-xs font-semibold text-accent-ink hover:bg-accent-strong disabled:opacity-45 transition-colors whitespace-nowrap min-h-[38px]"
+                      >
+                        <Mic className="w-3.5 h-3.5" />
+                        Record & Auto-Save
+                      </button>
+                    )}
+
+                    {voiceAutoPhase === 'recording' && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={cancelVoiceAutoCapture}
+                          className="touch-manipulation rounded-xl border border-hairline-strong bg-surface px-3 py-2 text-xs font-medium text-ink-secondary hover:text-ink whitespace-nowrap min-h-[38px]"
+                        >
+                          Discard
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void stopAndSaveVoiceAutoCapture()}
+                          className="touch-manipulation inline-flex items-center gap-1.5 rounded-xl bg-rose-500 px-3.5 py-2 text-xs font-semibold text-white hover:bg-rose-400 transition-colors whitespace-nowrap min-h-[38px]"
+                        >
+                          <Square className="w-3 h-3 fill-current" />
+                          Stop & Save Memory
+                        </button>
+                      </>
+                    )}
+
+                    {voiceAutoPhase === 'saving' && (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-medium text-cyan-800 dark:text-cyan-200 whitespace-nowrap">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Saving memory...
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {voiceAutoPhase === 'recording' && (
+                  <div className="rounded-lg border border-hairline bg-surface px-3 py-2 text-xs text-ink-secondary min-h-[44px]">
+                    {voiceLiveTranscript ? (
+                      <p className="leading-relaxed whitespace-pre-wrap">{voiceLiveTranscript}</p>
+                    ) : (
+                      <p className="text-ink-muted italic">Listening... speak your memory naturally.</p>
+                    )}
+                  </div>
+                )}
+
+                {!isBrowserSpeechSupported() && (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-300">
+                    Browser SpeechRecognition is unavailable here. Use a Chromium-based browser or type your memory below.
+                  </p>
+                )}
+
+                {voiceAutoError && (
+                  <p className="text-xs text-rose-600 dark:text-rose-300">{voiceAutoError}</p>
+                )}
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="sm:col-span-2 flex flex-col sm:flex-row gap-2">
@@ -2581,14 +3086,14 @@ export function MemoriesModule() {
             <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"
-                onClick={() => setEditorOpen(false)}
+                onClick={closeEditor}
                 className="rounded-xl border border-hairline-strong px-4 py-2.5 text-xs font-medium text-ink-secondary hover:text-ink"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                disabled={saving}
+                disabled={saving || voiceAutoPhase !== 'idle'}
                 className="rounded-xl bg-accent px-5 py-2.5 text-xs font-semibold text-accent-ink hover:bg-accent-strong disabled:opacity-50 transition-colors"
               >
                 {saving ? 'Saving...' : editingId ? 'Update Memory' : 'Save Memory'}

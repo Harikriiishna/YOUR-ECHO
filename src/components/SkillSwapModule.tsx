@@ -79,10 +79,9 @@ export function SkillSwapModule() {
 
       setListings(discRes.listings);
       setExchanges(exRes.exchanges);
-      if (activeExchange) {
-        const updated = exRes.exchanges.find((x) => x.id === activeExchange.id);
-        if (updated) setActiveExchange(updated);
-      }
+      setActiveExchange((prev) =>
+        prev ? exRes.exchanges.find((x) => x.id === prev.id) || prev : null
+      );
     } catch (err) {
       setNotice(err instanceof Error ? err.message : 'Unable to load SkillSwap listings.');
     }
@@ -115,6 +114,10 @@ export function SkillSwapModule() {
 
   const openExchangeChat = async (ex: SkillExchange) => {
     setActiveExchange(ex);
+    setChatInput('');
+    setScheduleInput('');
+    setScheduleNotes('');
+    setFeedbackNote('');
     setNotice(null);
     try {
       const res = await apiRequest<{ messages: ExchangeMessage[] }>(`/skills/exchanges/${encodeURIComponent(ex.id)}/messages`);

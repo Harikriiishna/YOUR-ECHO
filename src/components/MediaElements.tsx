@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { FileAudio, ImageIcon, Mic, Square, Upload, Volume2 } from 'lucide-react';
 import { apiRequest, fetchProtectedMediaObjectUrl, uploadMediaFile } from '../lib/api';
+import { startBrowserSpeechCapture, type LiveSpeechCaptureSession } from '../lib/browserSpeech';
 import type { MediaMeta } from '../types/echo';
 
 export function SafeImage({
@@ -149,6 +150,7 @@ export function VoiceRecorder({
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const cancelledRef = useRef(false);
+  const speechCaptureRef = useRef<LiveSpeechCaptureSession | null>(null);
 
   const stopResources = () => {
     if (timerRef.current) {
@@ -164,6 +166,8 @@ export function VoiceRecorder({
   useEffect(() => {
     return () => {
       cancelledRef.current = true;
+      speechCaptureRef.current?.cancel();
+      speechCaptureRef.current = null;
       if (recorderRef.current && recorderRef.current.state !== 'inactive') {
         try {
           recorderRef.current.stop();
@@ -193,6 +197,8 @@ export function VoiceRecorder({
       };
       recorder.onstop = async () => {
         const finalMime = recorder.mimeType || mimeType || 'audio/webm';
+        const capturedSpeech = speechCaptureRef.current?.stop() || '';
+        speechCaptureRef.current = null;
         stopResources();
         if (cancelledRef.current) return;
         const blob = new Blob(chunksRef.current, { type: finalMime });
@@ -207,14 +213,23 @@ export function VoiceRecorder({
           if (onTranscribed) {
             setTranscribing(true);
             try {
-              const tr = await apiRequest<{ transcript: string }>('/ai/transcribe', {
-                method: 'POST',
-                body: JSON.stringify({ mediaId: uploaded.id }),
-              });
-              if (!cancelledRef.current && tr.transcript) onTranscribed(tr.transcript);
-            } catch (err) {
+              let serverTranscript = '';
+              try {
+                const tr = await apiRequest<{ transcript: string }>('/ai/transcribe', {
+                  method: 'POST',
+                  body: JSON.stringify({ mediaId: uploaded.id }),
+                });
+                serverTranscript = (tr.transcript || '').trim();
+              } catch {
+                // Fall back to live browser speech dictation when cloud transcription is unavailable
+              }
+              const text = (serverTranscript || capturedSpeech).trim();
               if (!cancelledRef.current) {
-                setError(err instanceof Error ? err.message : 'Transcription failed, audio saved.');
+                if (text) {
+                  onTranscribed(text);
+                } else {
+                  setError('Voice note attached. Type notes manually if speech dictation is unavailable.');
+                }
               }
             } finally {
               if (!cancelledRef.current) setTranscribing(false);
@@ -231,10 +246,13 @@ export function VoiceRecorder({
 
       recorderRef.current = recorder;
       recorder.start();
+      speechCaptureRef.current = startBrowserSpeechCapture();
       setSeconds(0);
       setRecording(true);
       timerRef.current = window.setInterval(() => setSeconds((s) => s + 1), 1000);
     } catch {
+      speechCaptureRef.current?.cancel();
+      speechCaptureRef.current = null;
       stopResources();
       setRecording(false);
       setError('Microphone permission is unavailable. You can still upload an audio file.');
@@ -265,9 +283,13 @@ export function VoiceRecorder({
             method: 'POST',
             body: JSON.stringify({ mediaId: uploaded.id }),
           });
-          if (tr.transcript) onTranscribed(tr.transcript);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : 'Audio saved; transcription unavailable.');
+          if (tr.transcript?.trim()) {
+            onTranscribed(tr.transcript.trim());
+          } else {
+            setError('Audio attached. Add notes manually or record live voice for browser dictation.');
+          }
+        } catch {
+          setError('Audio attached. Add notes manually or record live voice for browser dictation.');
         } finally {
           setTranscribing(false);
         }
@@ -314,7 +336,7 @@ export function VoiceRecorder({
         </label>
 
         {uploading && <span className="text-xs text-sky-600 dark:text-sky-300">Uploading audio...</span>}
-        {transcribing && <span className="text-xs text-violet-600 dark:text-violet-300">Transcribing with ECHO AI...</span>}
+        {transcribing && <span className="text-xs text-violet-600 dark:text-violet-300">Processing voice note...</span>}
       </div>
       {error && <p className="text-xs text-amber-700 dark:text-amber-300">{error}</p>}
     </div>

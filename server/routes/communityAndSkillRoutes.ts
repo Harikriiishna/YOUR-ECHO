@@ -5,6 +5,10 @@ import { broadcastExchangeMessage, pushNotification } from '../ws.ts';
 
 export const communityAndSkillRouter = Router();
 
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, '\\$&');
+}
+
 function createNotif(userId: string, type: string, title: string, body: string, linkModule: string, linkId?: string) {
   const id = newId('notif');
   const createdAt = new Date().toISOString();
@@ -31,8 +35,8 @@ communityAndSkillRouter.get('/wisdom', requireAuth, (req: AuthenticatedRequest, 
     params.push(category);
   }
   if (q && q.trim()) {
-    const like = `%${q.trim()}%`;
-    wheres.push('(wp.title LIKE ? OR wp.content LIKE ?)');
+    const like = `%${escapeLike(q.trim())}%`;
+    wheres.push("(wp.title LIKE ? ESCAPE '\\' OR wp.content LIKE ? ESCAPE '\\')");
     params.push(like, like);
   }
   if (savedOnly === 'true') {
@@ -179,6 +183,12 @@ communityAndSkillRouter.post('/wisdom/:id/react', requireAuth, (req: Authenticat
     return;
   }
 
+  const postExists = db.prepare('SELECT id FROM wisdom_posts WHERE id = ?').get(req.params.id);
+  if (!postExists) {
+    res.status(404).json({ error: 'Wisdom post not found.' });
+    return;
+  }
+
   const existing = db
     .prepare("SELECT id FROM community_reactions WHERE target_type = 'wisdom' AND target_id = ? AND user_id = ? AND reaction_type = ?")
     .get(req.params.id, req.authUser!.id, reactionType) as { id: string } | undefined;
@@ -225,8 +235,8 @@ communityAndSkillRouter.get('/humanity', requireAuth, (req: AuthenticatedRequest
     params.push(category);
   }
   if (q && q.trim()) {
-    const like = `%${q.trim()}%`;
-    wheres.push('(hp.title LIKE ? OR hp.content LIKE ? OR hp.approx_region LIKE ?)');
+    const like = `%${escapeLike(q.trim())}%`;
+    wheres.push("(hp.title LIKE ? ESCAPE '\\' OR hp.content LIKE ? ESCAPE '\\' OR hp.approx_region LIKE ? ESCAPE '\\')");
     params.push(like, like, like);
   }
   if (savedOnly === 'true') {
@@ -370,6 +380,11 @@ communityAndSkillRouter.post('/humanity/:id/react', requireAuth, (req: Authentic
     res.status(400).json({ error: 'Invalid reactionType.' });
     return;
   }
+  const postExists = db.prepare('SELECT id FROM humanity_posts WHERE id = ?').get(req.params.id);
+  if (!postExists) {
+    res.status(404).json({ error: 'Story not found.' });
+    return;
+  }
   const existing = db
     .prepare("SELECT id FROM community_reactions WHERE target_type = 'humanity' AND target_id = ? AND user_id = ? AND reaction_type = ?")
     .get(req.params.id, req.authUser!.id, reactionType) as { id: string } | undefined;
@@ -425,7 +440,12 @@ communityAndSkillRouter.post('/community/block', requireAuth, (req: Authenticate
     const row = db.prepare('SELECT author_id FROM humanity_posts WHERE id = ?').get(targetId) as { author_id: string } | undefined;
     if (row) blockedId = row.author_id;
   } else if (directUserId) {
-    blockedId = directUserId;
+    const targetUser = db.prepare('SELECT id FROM users WHERE id = ?').get(directUserId) as { id: string } | undefined;
+    if (!targetUser) {
+      res.status(404).json({ error: 'Target account not found.' });
+      return;
+    }
+    blockedId = targetUser.id;
   }
 
   if (!blockedId || blockedId === req.authUser!.id) {
